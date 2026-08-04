@@ -15,7 +15,6 @@ export default function App() {
   const [activeJid, setActiveJid] = useState(null);
   const [page, setPage] = useState('chats');
   const [search, setSearch] = useState('');
-  const [connectError, setConnectError] = useState('');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -26,7 +25,11 @@ export default function App() {
     fetch('/api/conversations').then(r => r.json()).then(setConversations).catch(() => {});
     fetch('/api/status').then(r => r.json()).then(d => setStatus(d.status)).catch(() => {});
 
-    socket.on('status', (s) => { setStatus(s); if (s === 'connected') { setShowQR(false); } });
+    socket.on('status', (s) => {
+      setStatus(s);
+      if (s === 'connected') setShowQR(false);
+      if (s === 'qr') setShowQR(true);
+    });
     socket.on('qr', (q) => { if (q) { setQr(q); setShowQR(true); } });
     socket.on('conversation_update', (conv) => {
       setConversations(prev => {
@@ -37,30 +40,12 @@ export default function App() {
       });
     });
 
-    return () => {
-      socket.off('status');
-      socket.off('qr');
-      socket.off('conversation_update');
-    };
+    return () => { socket.off('status'); socket.off('qr'); socket.off('conversation_update'); };
   }, []);
 
-  const handleConnect = useCallback(async () => {
-    setConnectError('');
+  const handleConnect = useCallback(() => {
     setShowQR(true);
     setQr(null);
-    try {
-      const res = await fetch('/api/connect', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        setConnectError(data.error || 'Erro ao conectar');
-        setShowQR(false);
-      } else if (data.qr) {
-        setQr(data.qr);
-      }
-    } catch (e) {
-      setConnectError('Erro de rede ao tentar conectar');
-      setShowQR(false);
-    }
   }, []);
 
   const handleDisconnect = useCallback(() => {
@@ -112,7 +97,7 @@ export default function App() {
         )}
       </div>
 
-      {/* Right panel: Chat */}
+      {/* Right panel */}
       <div className="flex-1 flex flex-col h-full bg-chat-light dark:bg-chat-dark">
         {activeConv ? (
           <ChatWindow conv={activeConv} status={status} />
@@ -130,13 +115,10 @@ export default function App() {
               </p>
             </div>
             {status !== 'connected' && (
-              <button onClick={() => setPage('settings')} className="btn-primary flex items-center gap-2 mt-2">
-                <span className="material-icons-outlined text-lg">settings</span>
-                Ir para Configurações
+              <button onClick={handleConnect} className="btn-primary flex items-center gap-2 mt-2">
+                <span className="material-icons-outlined text-lg">qr_code_scanner</span>
+                Conectar WhatsApp
               </button>
-            )}
-            {connectError && (
-              <p className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">{connectError}</p>
             )}
           </div>
         )}

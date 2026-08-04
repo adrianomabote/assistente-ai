@@ -5,33 +5,23 @@ export default function Settings({ status, onDisconnect, onConnect }) {
     botEnabled: false,
     botName: 'Assistente',
     botMessage: 'Olá! Como posso ajudar você hoje?',
-    evolutionApiUrl: '',
-    evolutionApiKey: '',
-    instanceName: 'meu-whatsapp',
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [keyEditing, setKeyEditing] = useState(false);
 
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(s => {
-      setSettings(s);
-    }).catch(() => {});
+    fetch('/api/settings').then(r => r.json()).then(setSettings).catch(() => {});
   }, []);
 
   const save = async () => {
     setLoading(true);
     try {
-      const payload = { ...settings };
-      if (!keyEditing) delete payload.evolutionApiKey;
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(settings),
       });
       setSaved(true);
-      setKeyEditing(false);
       setTimeout(() => setSaved(false), 2500);
     } catch {}
     setLoading(false);
@@ -40,62 +30,6 @@ export default function Settings({ status, onDisconnect, onConnect }) {
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-bg-dark">
       <div className="p-4 space-y-5">
-
-        {/* Evolution API Config */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1">
-            <span className="material-icons-outlined text-sm">link</span>
-            Evolution API
-          </h3>
-          <div className="bg-white dark:bg-sidebar-dark rounded-xl p-4 space-y-3 shadow-sm">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">URL da Evolution API</label>
-              <input
-                value={settings.evolutionApiUrl}
-                onChange={e => setSettings(s => ({ ...s, evolutionApiUrl: e.target.value }))}
-                className="input-field"
-                placeholder="https://sua-evolution-api.com"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">API Key</label>
-              <div className="relative">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={keyEditing ? settings.evolutionApiKey : (settings.evolutionApiKey === '***' ? '••••••••••••' : settings.evolutionApiKey)}
-                  onChange={e => { setKeyEditing(true); setSettings(s => ({ ...s, evolutionApiKey: e.target.value })); }}
-                  onFocus={() => { if (settings.evolutionApiKey === '***') { setSettings(s => ({ ...s, evolutionApiKey: '' })); setKeyEditing(true); } }}
-                  className="input-field pr-10"
-                  placeholder="sua-api-key-aqui"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <span className="material-icons-outlined text-lg">{showKey ? 'visibility_off' : 'visibility'}</span>
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Nome da Instância</label>
-              <input
-                value={settings.instanceName}
-                onChange={e => setSettings(s => ({ ...s, instanceName: e.target.value.replace(/\s+/g, '-').toLowerCase() }))}
-                className="input-field"
-                placeholder="meu-whatsapp"
-              />
-            </div>
-
-            {/* Info box */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-xs text-blue-600 dark:text-blue-300 space-y-1">
-              <p className="font-semibold">📡 Onde obter a Evolution API grátis:</p>
-              <p>1. Acesse <strong>evolution-api.com</strong> e auto-hospede no seu VPS</p>
-              <p>2. Ou use serviços como <strong>evoapi.io</strong> ou <strong>evoapicloud.com</strong></p>
-              <p>3. Cole a URL e a API Key acima e clique em Salvar</p>
-            </div>
-          </div>
-        </section>
 
         {/* Bot Config */}
         <section>
@@ -132,7 +66,7 @@ export default function Settings({ status, onDisconnect, onConnect }) {
               <textarea
                 value={settings.botMessage}
                 onChange={e => setSettings(s => ({ ...s, botMessage: e.target.value }))}
-                rows={5}
+                rows={6}
                 className="input-field resize-none"
                 placeholder="Olá! Como posso ajudar você hoje?"
               />
@@ -152,27 +86,25 @@ export default function Settings({ status, onDisconnect, onConnect }) {
           {loading
             ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             : <span className="material-icons-outlined text-lg">save</span>}
-          {saved ? '✓ Configurações salvas!' : 'Salvar configurações'}
+          {saved ? '✓ Salvo!' : 'Salvar configurações'}
         </button>
 
-        {/* Connection status */}
+        {/* WhatsApp connection */}
         <section>
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1">
             <span className="material-icons-outlined text-sm">wifi</span>
-            WhatsApp
+            Conexão WhatsApp
           </h3>
           <div className="bg-white dark:bg-sidebar-dark rounded-xl p-4 space-y-3 shadow-sm">
             <div className="flex items-center gap-2">
               <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
                 status === 'connected' ? 'bg-green-400' :
                 status === 'qr' ? 'bg-yellow-400 animate-pulse' :
-                status === 'connecting' ? 'bg-blue-400 animate-pulse' :
                 'bg-slate-400'
               }`} />
               <span className="text-sm text-slate-700 dark:text-slate-200">
                 {status === 'connected' ? 'WhatsApp Conectado ✅' :
-                 status === 'qr' ? 'Aguardando leitura do QR Code...' :
-                 status === 'connecting' ? 'Conectando...' :
+                 status === 'qr' ? 'Escaneie o QR Code no celular...' :
                  'WhatsApp Desconectado'}
               </span>
             </div>
@@ -200,11 +132,11 @@ export default function Settings({ status, onDisconnect, onConnect }) {
         {/* How it works */}
         <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-xs text-emerald-700 dark:text-emerald-300 space-y-1.5">
           <p className="font-semibold text-sm">🚀 Como usar</p>
-          <p>1. Configure a Evolution API acima e salve</p>
-          <p>2. Clique em <strong>Conectar via QR Code</strong></p>
-          <p>3. Abra o WhatsApp → <strong>Dispositivos conectados</strong> → escaneie o QR</p>
-          <p>4. Pronto! As conversas aparecem aqui em tempo real</p>
-          <p>5. Ative o bot e configure a mensagem automática</p>
+          <p>1. Clique em <strong>Conectar via QR Code</strong></p>
+          <p>2. Abra o WhatsApp no celular</p>
+          <p>3. Vá em <strong>Dispositivos conectados → Conectar dispositivo</strong></p>
+          <p>4. Escaneie o QR Code que aparecer</p>
+          <p>5. Pronto! As conversas aparecem aqui em tempo real</p>
         </div>
       </div>
     </div>
