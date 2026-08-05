@@ -124,6 +124,10 @@
   "settings": {
     "botEnabled": false,
     "botName": "Assistente",
-    "botMessage": "Olá! Como posso ajudar você hoje?"
+    "botMessage": "Olá! Como posso ajudar você hoje?",
+    "aiEnabled": true,
+    "aiToken": "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",
+    "aiModel": "gpt-4o-mini",
+    "aiSystemPrompt": ""
   }
 }

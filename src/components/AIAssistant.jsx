@@ -31,34 +31,101 @@ const SUGGESTIONS = [
 
 // ── Voice Call Overlay ──────────────────────────────────────────────────────
 function VoiceCall({ messages, onEnd }) {
-  const [callState, setCallState] = useState('listening'); // listening | thinking | speaking
-  const [transcript, setTranscript] = useState('');
-  const [agentText, setAgentText] = useState('');
-  const [callMessages, setCallMessages] = useState(messages);
-  const recognitionRef = useRef(null);
-  const synthRef = useRef(window.speechSynthesis);
-  const activeRef = useRef(true);
+  const [callState, setCallState] = useState('greeting'); // greeting | listening | thinking | speaking | error
+  const [transcript, setTranscript]   = useState('');
+  const [agentText, setAgentText]     = useState('A iniciar chamada…');
 
+  // Use refs so callbacks always see latest values (no stale closures)
+  const callStateRef   = useRef('greeting');
+  const callMsgsRef    = useRef([...messages]);
+  const activeRef      = useRef(true);
+  const recognitionRef = useRef(null);
+  const synth          = useRef(window.speechSynthesis);
+
+  const setState = (s) => { callStateRef.current = s; setCallState(s); };
+
+  // ── speak text then call onDone ──────────────────────────────────────────
   const speak = useCallback((text, onDone) => {
-    const synth = synthRef.current;
-    synth.cancel();
+    synth.current.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'pt-BR';
     utter.rate = 1.05;
-    utter.pitch = 1;
-    // prefer a pt-BR voice if available
-    const voices = synth.getVoices();
-    const ptVoice = voices.find(v => v.lang.startsWith('pt')) || null;
-    if (ptVoice) utter.voice = ptVoice;
-    utter.onend = () => onDone && onDone();
-    setCallState('speaking');
-    synth.speak(utter);
+    // load voices (may be async on mobile)
+    const tryVoice = () => {
+      const voices = synth.current.getVoices();
+      const pt = voices.find(v => v.lang.startsWith('pt'));
+      if (pt) utter.voice = pt;
+    };
+    tryVoice();
+    if (synth.current.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = tryVoice;
+    }
+    utter.onend   = () => { if (activeRef.current) onDone?.(); };
+    utter.onerror = () => { if (activeRef.current) onDone?.(); };
+    setState('speaking');
+    setAgentText(text);
+    synth.current.speak(utter);
   }, []);
 
-  const askAI = useCallback(async (q, history) => {
-    setCallState('thinking');
+  // ── start listening ──────────────────────────────────────────────────────
+  const startListening = useCallback(() => {
+    if (!activeRef.current) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      setState('error');
+      setAgentText('O teu browser não suporta reconhecimento de voz. Usa Chrome.');
+      return;
+    }
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.interimResults = true;
+    rec.continuous = false;
+    recognitionRef.current = rec;
+    setState('listening');
+    setTranscript('');
+
+    rec.onresult = (e) => {
+      let interim = '', final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      setTranscript(final || interim);
+      if (final.trim()) {
+        rec.abort();
+        const q = final.trim();
+        setTranscript('');
+        // add user message to ref immediately
+        callMsgsRef.current = [...callMsgsRef.current, { role: 'user', content: q }];
+        askAI(q);
+      }
+    };
+
+    rec.onerror = (e) => {
+      // no-speech is normal — just restart
+      if (!activeRef.current) return;
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      setState('error');
+      setAgentText(`Erro de microfone: ${e.error}`);
+    };
+
+    rec.onend = () => {
+      if (!activeRef.current) return;
+      // only auto-restart when we're still in listening mode
+      if (callStateRef.current === 'listening') {
+        setTimeout(() => { if (activeRef.current && callStateRef.current === 'listening') startListening(); }, 250);
+      }
+    };
+
+    try { rec.start(); } catch { /* already started */ }
+  }, []); // stable — uses refs only
+
+  // ── call OpenAI API ──────────────────────────────────────────────────────
+  const askAI = useCallback(async (q) => {
+    setState('thinking');
     setAgentText('A pensar…');
     try {
+      const history = callMsgsRef.current.slice(0, -1); // everything except last user msg
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,114 +134,57 @@ function VoiceCall({ messages, onEnd }) {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const reply = data.reply;
-      setCallMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-      setAgentText(reply);
-      speak(reply, () => {
-        if (activeRef.current) startListening();
-      });
+      callMsgsRef.current = [...callMsgsRef.current, { role: 'assistant', content: reply }];
+      speak(reply, () => { if (activeRef.current) startListening(); });
     } catch (e) {
-      const err = 'Ocorreu um erro. Tenta novamente.';
-      setAgentText(err);
-      speak(err, () => { if (activeRef.current) startListening(); });
+      const errMsg = e.message.includes('Token') || e.message.includes('401')
+        ? 'Token OpenAI não configurado. Vai às Definições e adiciona a tua API Key.'
+        : 'Ocorreu um erro com a IA. Tenta novamente.';
+      setState('error');
+      setAgentText(errMsg);
+      speak(errMsg, () => { if (activeRef.current) startListening(); });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speak]);
+  }, [speak, startListening]);
 
-  const startListening = useCallback(() => {
-    if (!activeRef.current) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
-    const rec = new SR();
-    rec.lang = 'pt-BR';
-    rec.interimResults = true;
-    rec.continuous = false;
-    recognitionRef.current = rec;
-    setCallState('listening');
-    setTranscript('');
-
-    rec.onresult = (e) => {
-      let interim = '';
-      let final = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
-      }
-      setTranscript(final || interim);
-      if (final.trim()) {
-        rec.stop();
-        setCallMessages(prev => {
-          const updated = [...prev, { role: 'user', content: final.trim() }];
-          askAI(final.trim(), prev);
-          return updated;
-        });
-        setTranscript('');
-      }
-    };
-
-    rec.onerror = (e) => {
-      if (e.error === 'no-speech' && activeRef.current) startListening();
-    };
-    rec.onend = () => {
-      // restart if still in listening state and call is active
-      if (activeRef.current && callState === 'listening') {
-        // small delay to avoid rapid restart
-        setTimeout(() => { if (activeRef.current) startListening(); }, 300);
-      }
-    };
-
-    try { rec.start(); } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [askAI]);
-
+  // ── greet on mount ───────────────────────────────────────────────────────
   useEffect(() => {
-    // greet and start listening
-    const greeting = 'Olá chefe! Estou a ouvir, pode falar.';
-    setAgentText(greeting);
+    const greeting = 'Olá chefe! Pode falar, estou a ouvir.';
     speak(greeting, () => { if (activeRef.current) startListening(); });
     return () => {
       activeRef.current = false;
-      recognitionRef.current?.stop();
-      synthRef.current.cancel();
+      recognitionRef.current?.abort();
+      synth.current.cancel();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // eslint-disable-line
 
   const handleEnd = () => {
     activeRef.current = false;
-    recognitionRef.current?.stop();
-    synthRef.current.cancel();
-    onEnd(callMessages);
+    recognitionRef.current?.abort();
+    synth.current.cancel();
+    onEnd(callMsgsRef.current);
   };
 
-  const stateLabel = {
-    listening: 'A ouvir…',
-    thinking: 'A pensar…',
-    speaking: 'A falar…',
-  }[callState];
-
-  const stateColor = {
-    listening: 'text-green-400',
-    thinking: 'text-amber-400',
-    speaking: 'text-blue-400',
-  }[callState];
+  const stateLabel = { greeting: 'A iniciar…', listening: 'A ouvir…', thinking: 'A pensar…', speaking: 'A falar…', error: 'Erro' }[callState] || '';
+  const stateColor = { greeting: 'text-slate-400', listening: 'text-green-400', thinking: 'text-amber-400', speaking: 'text-blue-400', error: 'text-red-400' }[callState];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0f14]/95 backdrop-blur-sm">
-      {/* Agent avatar */}
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0f14]/96 backdrop-blur-sm">
+      {/* Avatar */}
       <div className="relative mb-6">
         <div className={`w-28 h-28 rounded-full bg-primary flex items-center justify-center shadow-2xl ${
-          callState === 'listening' ? 'ring-4 ring-primary/40 animate-pulse' :
-          callState === 'speaking' ? 'ring-4 ring-blue-400/40 animate-pulse' : ''
+          callState === 'listening' ? 'ring-4 ring-primary/50 animate-pulse' :
+          callState === 'speaking'  ? 'ring-4 ring-blue-400/50 animate-pulse' : ''
         }`}>
           <span className="material-icons-outlined text-white" style={{ fontSize: 56 }}>support_agent</span>
         </div>
-        {/* State indicator dot */}
         <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg ${
           callState === 'listening' ? 'bg-green-500' :
-          callState === 'thinking' ? 'bg-amber-500' : 'bg-blue-500'
+          callState === 'thinking'  ? 'bg-amber-500' :
+          callState === 'speaking'  ? 'bg-blue-500'  :
+          callState === 'error'     ? 'bg-red-500'   : 'bg-slate-500'
         }`}>
-          <span className="material-icons-outlined text-xs">
-            {callState === 'listening' ? 'mic' : callState === 'thinking' ? 'hourglass_empty' : 'volume_up'}
+          <span className="material-icons-outlined" style={{ fontSize: 14 }}>
+            {callState === 'listening' ? 'mic' : callState === 'thinking' ? 'hourglass_empty' : callState === 'speaking' ? 'volume_up' : 'priority_high'}
           </span>
         </div>
       </div>
@@ -182,49 +192,43 @@ function VoiceCall({ messages, onEnd }) {
       <p className="text-white text-xl font-semibold mb-1">Assistente ZapCRM</p>
       <p className={`text-sm font-medium mb-6 ${stateColor}`}>{stateLabel}</p>
 
-      {/* Live transcript / agent speech */}
-      <div className="w-full max-w-sm px-6 mb-8 text-center min-h-[60px]">
-        {callState === 'listening' && transcript && (
+      {/* Live text */}
+      <div className="w-full max-w-sm px-6 mb-8 text-center min-h-[64px] flex items-center justify-center">
+        {callState === 'listening' && transcript ? (
           <p className="text-slate-300 text-sm italic">"{transcript}"</p>
-        )}
-        {(callState === 'thinking' || callState === 'speaking') && agentText && (
+        ) : callState === 'listening' ? (
+          <p className="text-slate-500 text-sm">Fala agora…</p>
+        ) : (
           <p className="text-slate-200 text-sm leading-relaxed line-clamp-4">{agentText}</p>
         )}
       </div>
 
-      {/* Sound waves animation */}
+      {/* Wave bars */}
       <div className="flex items-center gap-1.5 mb-10 h-10">
-        {[...Array(7)].map((_, i) => (
-          <div
-            key={i}
-            className={`w-1.5 rounded-full transition-all ${
+        {[...Array(9)].map((_, i) => (
+          <div key={i}
+            className={`w-1.5 rounded-full ${
               callState === 'listening' ? 'bg-green-400' :
-              callState === 'speaking' ? 'bg-blue-400' : 'bg-slate-600'
+              callState === 'speaking'  ? 'bg-blue-400'  : 'bg-slate-600'
             }`}
             style={{
-              height: callState === 'thinking' ? '8px' :
-                `${12 + Math.sin(i * 1.2) * 10 + (callState !== 'thinking' ? 8 : 0)}px`,
-              animation: callState !== 'thinking' ? `wave ${0.6 + i * 0.1}s ease-in-out infinite alternate` : 'none',
+              height: (callState === 'thinking' || callState === 'greeting') ? '6px' : `${10 + Math.abs(Math.sin(i)) * 18}px`,
+              animation: (callState === 'listening' || callState === 'speaking')
+                ? `wave ${0.5 + i * 0.08}s ease-in-out infinite alternate`
+                : 'none',
             }}
           />
         ))}
       </div>
 
-      {/* End call button */}
-      <button
-        onClick={handleEnd}
-        className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-xl transition-all active:scale-95"
-      >
+      {/* End call */}
+      <button onClick={handleEnd}
+        className="w-16 h-16 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-xl transition-all active:scale-95">
         <span className="material-icons-outlined text-white" style={{ fontSize: 32 }}>call_end</span>
       </button>
       <p className="text-slate-500 text-xs mt-3">Terminar chamada</p>
 
-      <style>{`
-        @keyframes wave {
-          from { transform: scaleY(0.6); }
-          to   { transform: scaleY(1.4); }
-        }
-      `}</style>
+      <style>{`@keyframes wave { from{transform:scaleY(0.4)} to{transform:scaleY(1.6)} }`}</style>
     </div>
   );
 }
