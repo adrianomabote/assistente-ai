@@ -1,28 +1,20 @@
 import { useState, useEffect } from 'react';
 
-const defaultKeywords = [
-  { id: 1, keywords: 'preço, valor, quanto custa', reply: 'Para saber os preços, acesse nosso site ou fale com um atendente.' },
-  { id: 2, keywords: 'horário, funcionamento, aberto', reply: 'Funcionamos de segunda a sexta das 8h às 18h e aos sábados das 8h às 13h.' },
-  { id: 3, keywords: 'endereço, localização, onde fica', reply: 'Estamos localizados na Rua Exemplo, 123 - Centro.' },
-];
-
 export default function Settings({ status, onDisconnect, onConnect }) {
   const [settings, setSettings] = useState({
-    botEnabled: false,
-    botName: 'Assistente',
-    botMessage: 'Olá! 👋 Obrigado por entrar em contato. Em breve um atendente irá te responder.',
-    keywordsEnabled: false,
-    keywords: [],
+    aiEnabled: false,
+    aiToken: '',
+    aiModel: 'gpt-4o-mini',
+    aiSystemPrompt: '',
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('bot');
-  const [newKw, setNewKw] = useState({ keywords: '', reply: '' });
-  const [editingId, setEditingId] = useState(null);
+  const [activeTab, setActiveTab] = useState('ia');
+  const [showToken, setShowToken] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(s => {
-      setSettings({ ...s, keywords: s.keywords || [] });
+      setSettings(prev => ({ ...prev, ...s }));
     }).catch(() => {});
   }, []);
 
@@ -40,21 +32,15 @@ export default function Settings({ status, onDisconnect, onConnect }) {
     setLoading(false);
   };
 
-  const addKeyword = () => {
-    if (!newKw.keywords.trim() || !newKw.reply.trim()) return;
-    const id = Date.now();
-    setSettings(s => ({ ...s, keywords: [...(s.keywords || []), { id, ...newKw }] }));
-    setNewKw({ keywords: '', reply: '' });
-  };
-
-  const removeKeyword = (id) => {
-    setSettings(s => ({ ...s, keywords: s.keywords.filter(k => k.id !== id) }));
-  };
-
   const tabs = [
-    { id: 'bot', label: 'Bot', icon: 'smart_toy' },
-    { id: 'keywords', label: 'Palavras-chave', icon: 'key' },
-    { id: 'connection', label: 'Conexão', icon: 'wifi' },
+    { id: 'ia',         label: 'IA',       icon: 'auto_awesome' },
+    { id: 'connection', label: 'Conexão',  icon: 'wifi' },
+  ];
+
+  const models = [
+    { value: 'gpt-4o-mini',  label: 'GPT-4o Mini (rápido e económico)' },
+    { value: 'gpt-4o',       label: 'GPT-4o (mais inteligente)' },
+    { value: 'gpt-3.5-turbo',label: 'GPT-3.5 Turbo (legado)' },
   ];
 
   return (
@@ -79,132 +65,94 @@ export default function Settings({ status, onDisconnect, onConnect }) {
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
 
-        {/* ── Bot tab ─────────────────────────────── */}
-        {activeTab === 'bot' && (
+        {/* ── IA tab ─────────────────────────────────── */}
+        {activeTab === 'ia' && (
           <div className="p-4 space-y-4">
-            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-4">
-              {/* Toggle */}
+
+            {/* Enable toggle */}
+            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resposta automática</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Responde automaticamente novas mensagens</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Ativar respostas com IA</p>
+                  <p className="text-xs text-slate-400 mt-0.5">A IA responde automaticamente às mensagens dos clientes</p>
                 </div>
                 <button
-                  onClick={() => setSettings(s => ({ ...s, botEnabled: !s.botEnabled }))}
-                  className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${settings.botEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
+                  onClick={() => setSettings(s => ({ ...s, aiEnabled: !s.aiEnabled }))}
+                  className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${settings.aiEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
                 >
-                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${settings.botEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${settings.aiEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                 </button>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Nome do assistente</label>
-                <input
-                  value={settings.botName}
-                  onChange={e => setSettings(s => ({ ...s, botName: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="Ex: Suporte da Loja"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Mensagem padrão</label>
-                <textarea
-                  value={settings.botMessage}
-                  onChange={e => setSettings(s => ({ ...s, botMessage: e.target.value }))}
-                  rows={5}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                  placeholder="Olá! Como posso ajudar você hoje?"
-                />
-                <p className="text-xs text-slate-400 mt-1">Enviada quando nenhuma palavra-chave for detectada.</p>
-              </div>
+              {settings.aiEnabled && !settings.aiToken && (
+                <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                  <span className="material-icons-outlined text-amber-500 text-lg flex-shrink-0">warning</span>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">Adicione o seu token OpenAI abaixo para a IA funcionar.</p>
+                </div>
+              )}
             </div>
 
-            <button onClick={save} disabled={loading}
-              className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
-              {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span className="material-icons-outlined text-lg">save</span>}
-              {saved ? '✓ Configurações salvas!' : 'Salvar configurações'}
-            </button>
-          </div>
-        )}
-
-        {/* ── Keywords tab ─────────────────────────── */}
-        {activeTab === 'keywords' && (
-          <div className="p-4 space-y-4">
-            {/* Toggle */}
-            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Respostas por palavra-chave</p>
-                <p className="text-xs text-slate-400 mt-0.5">Responde diferente conforme o que o cliente escreve</p>
-              </div>
-              <button
-                onClick={() => setSettings(s => ({ ...s, keywordsEnabled: !s.keywordsEnabled }))}
-                className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${settings.keywordsEnabled ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'}`}
-              >
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${settings.keywordsEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
-              </button>
-            </div>
-
-            {/* Existing keywords */}
-            {(settings.keywords || []).length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-1">Regras configuradas</p>
-                {settings.keywords.map(kw => (
-                  <div key={kw.id} className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {kw.keywords.split(',').map((k, i) => (
-                            <span key={i} className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-medium">
-                              {k.trim()}
-                            </span>
-                          ))}
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-300 italic">"{kw.reply}"</p>
-                      </div>
-                      <button onClick={() => removeKeyword(kw.id)}
-                        className="p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 transition-colors flex-shrink-0">
-                        <span className="material-icons-outlined text-lg">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add new */}
+            {/* API Token */}
             <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Nova regra</p>
               <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Palavras-chave (separadas por vírgula)</label>
-                <input
-                  value={newKw.keywords}
-                  onChange={e => setNewKw(n => ({ ...n, keywords: e.target.value }))}
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Token OpenAI</label>
+                <div className="relative">
+                  <input
+                    type={showToken ? 'text' : 'password'}
+                    value={settings.aiToken}
+                    onChange={e => setSettings(s => ({ ...s, aiToken: e.target.value }))}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(s => !s)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  >
+                    <span className="material-icons-outlined text-lg">{showToken ? 'visibility_off' : 'visibility'}</span>
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Obtenha em{' '}
+                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer"
+                    className="text-primary hover:underline">platform.openai.com/api-keys</a>
+                </p>
+              </div>
+
+              {/* Model */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Modelo</label>
+                <select
+                  value={settings.aiModel}
+                  onChange={e => setSettings(s => ({ ...s, aiModel: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="preço, valor, quanto custa"
-                />
+                >
+                  {models.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
               </div>
+            </div>
+
+            {/* System prompt */}
+            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-2">
               <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">Resposta automática</label>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wider">Instruções para a IA</label>
+                <p className="text-xs text-slate-400 mb-2">Descreva como a IA deve se comportar, o tom, o que pode e não pode dizer, os produtos/serviços, etc.</p>
                 <textarea
-                  value={newKw.reply}
-                  onChange={e => setNewKw(n => ({ ...n, reply: e.target.value }))}
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                  placeholder="Nossos preços estão disponíveis em..."
+                  value={settings.aiSystemPrompt}
+                  onChange={e => setSettings(s => ({ ...s, aiSystemPrompt: e.target.value }))}
+                  rows={10}
+                  placeholder={`Exemplo:\nVocê é um assistente de atendimento da Loja XYZ.\nResponda sempre em português de Portugal.\nSeja simpático, profissional e conciso.\nNão discuta preços — diga que um agente irá entrar em contacto.\nProdutos: camisas, calças, sapatos (ver site: loja.pt)`}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none leading-relaxed"
                 />
               </div>
-              <button onClick={addKeyword} disabled={!newKw.keywords.trim() || !newKw.reply.trim()}
-                className="w-full py-2 bg-primary hover:bg-primary-dark disabled:opacity-50 text-white font-medium rounded-lg flex items-center justify-center gap-2 transition-colors text-sm">
-                <span className="material-icons-outlined text-lg">add</span>
-                Adicionar regra
-              </button>
             </div>
 
             <button onClick={save} disabled={loading}
               className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
-              {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <span className="material-icons-outlined text-lg">save</span>}
-              {saved ? '✓ Salvo!' : 'Salvar'}
+              {loading
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <span className="material-icons-outlined text-lg">save</span>}
+              {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
             </button>
           </div>
         )}
@@ -227,9 +175,9 @@ export default function Settings({ status, onDisconnect, onConnect }) {
                      'WhatsApp Desconectado'}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {status === 'connected' ? 'Recebendo e enviando mensagens normalmente' :
-                     status === 'qr' ? 'Escaneie o QR Code com seu celular' :
-                     'Conecte para começar a usar o CRM'}
+                    {status === 'connected' ? 'A sessão fica guardada — não precisa de voltar a ligar' :
+                     status === 'qr' ? 'Escaneie o QR Code com o seu telemóvel' :
+                     'Ligue para começar a usar o ZapCRM'}
                   </p>
                 </div>
               </div>
@@ -249,14 +197,13 @@ export default function Settings({ status, onDisconnect, onConnect }) {
               )}
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-xs text-blue-600 dark:text-blue-300 space-y-2">
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-xs text-blue-600 dark:text-blue-300 space-y-1.5">
               <p className="font-semibold">📱 Como conectar</p>
               <p>1. Clique em <strong>Conectar via QR Code</strong></p>
-              <p>2. Abra o WhatsApp no celular</p>
+              <p>2. Abra o WhatsApp no telemóvel</p>
               <p>3. Toque nos três pontos → <strong>Dispositivos conectados</strong></p>
-              <p>4. Toque em <strong>Conectar dispositivo</strong></p>
-              <p>5. Escaneie o QR Code que aparecer</p>
-              <p className="text-blue-400 pt-1">⚡ A sessão fica salva — você só precisa escanear uma vez.</p>
+              <p>4. Toque em <strong>Conectar dispositivo</strong> e escaneie o código</p>
+              <p className="text-blue-400 pt-1">⚡ A sessão fica guardada automaticamente. Só precisa de escanear uma vez — mesmo que abra noutro dispositivo.</p>
             </div>
           </div>
         )}

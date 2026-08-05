@@ -4,10 +4,11 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { execSync } from 'child_process';
+import axios from 'axios';
 import pkg from 'whatsapp-web.js';
 import QRCode from 'qrcode';
 
-const { Client, LocalAuth, MessageMedia } = pkg;
+const { Client, LocalAuth } = pkg;
 
 const app = express();
 const httpServer = createServer(app);
@@ -28,9 +29,10 @@ const loadData = () => {
   return {
     conversations: {},
     settings: {
-      botEnabled: false,
-      botName: 'Assistente',
-      botMessage: 'Olá! Como posso ajudar você hoje?',
+      aiEnabled: false,
+      aiToken: '',
+      aiModel: 'gpt-4o-mini',
+      aiSystemPrompt: '',
     },
   };
 };
@@ -74,6 +76,45 @@ const extractText = (msg) => {
   if (msg.type === 'location') return '[Localização 📍]';
   return msg.body || '[Mensagem]';
 };
+
+// ─── AI Reply ─────────────────────────────────────────────────────────────────
+async function getAIReply(conv, incomingText) {
+  const { aiToken, aiModel, aiSystemPrompt } = appData.settings;
+  if (!aiToken) throw new Error('Token OpenAI não configurado');
+
+  // Build message history (last 20 messages for context)
+  const history = (conv.messages || []).slice(-20).map(m => ({
+    role: m.fromMe ? 'assistant' : 'user',
+    content: m.text,
+  }));
+
+  // Make sure the incoming message is at the end
+  if (!history.length || history[history.length - 1].content !== incomingText) {
+    history.push({ role: 'user', content: incomingText });
+  }
+
+  const systemPrompt = aiSystemPrompt?.trim() ||
+    'Você é um assistente de atendimento ao cliente. Responda de forma simpática, clara e concisa.';
+
+  const response = await axios.post(
+    'https://api.openai.com/v1/chat/completions',
+    {
+      model: aiModel || 'gpt-4o-mini',
+      messages: [{ role: 'system', content: systemPrompt }, ...history],
+      max_tokens: 500,
+      temperature: 0.7,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${aiToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    }
+  );
+
+  return response.data.choices[0].message.content.trim();
+}
 
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 async function connectWhatsApp() {
@@ -128,7 +169,6 @@ async function connectWhatsApp() {
     connectionStatus = 'disconnected';
     io.emit('status', 'disconnected');
     io.emit('qr', null);
-    // Reconnect after a delay
     setTimeout(connectWhatsApp, 5000);
   });
 
@@ -141,7 +181,6 @@ async function connectWhatsApp() {
     const msgId = msg.id._serialized;
 
     const conv = upsertConv(id);
-    // Try to get contact name
     try {
       const contact = await msg.getContact();
       if (contact.pushname && contact.pushname !== getPhone(id)) conv.name = contact.pushname;
@@ -160,23 +199,14 @@ async function connectWhatsApp() {
     io.emit('message', { jid: id, message });
     io.emit('conversation_update', { ...conv });
 
-    // Auto-reply
-    if (appData.settings.botEnabled && !conv.isGroup) {
-      let reply = appData.settings.botMessage || 'Olá!';
-      if (appData.settings.keywordsEnabled && Array.isArray(appData.settings.keywords)) {
-        const lowerText = text.toLowerCase();
-        for (const rule of appData.settings.keywords) {
-          const kws = (rule.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-          if (kws.some(kw => lowerText.includes(kw))) {
-            reply = rule.reply;
-            break;
-          }
-        }
-      }
+    // AI auto-reply (only for individual chats, not groups)
+    if (appData.settings.aiEnabled && appData.settings.aiToken && !conv.isGroup) {
       setTimeout(async () => {
         try {
+          const reply = await getAIReply(conv, text);
           await client.sendMessage(id, reply);
-          const autoId = `auto_${Date.now()}`;
+
+          const autoId = `ai_${Date.now()}`;
           const autoMsg = { id: autoId, text: reply, fromMe: true, timestamp: Math.floor(Date.now() / 1000), status: 'sent' };
           conv.messages.push(autoMsg);
           conv.lastMessage = reply;
@@ -184,13 +214,14 @@ async function connectWhatsApp() {
           saveData(appData);
           io.emit('message', { jid: id, message: autoMsg });
           io.emit('conversation_update', { ...conv });
-        } catch (e) { console.error('Auto-reply error:', e.message); }
-      }, 1200);
+        } catch (e) {
+          console.error('AI reply error:', e.message);
+        }
+      }, 1500);
     }
   });
 
   client.on('message_create', async (msg) => {
-    // Track outbound messages sent from other devices
     if (!msg.fromMe) return;
     if (msg.from === 'status@broadcast') return;
 

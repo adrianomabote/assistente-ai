@@ -5,8 +5,10 @@ import ConversationList from './components/ConversationList';
 import ChatWindow from './components/ChatWindow';
 import Settings from './components/Settings';
 import QRModal from './components/QRModal';
+import LoginScreen from './components/LoginScreen';
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem('zapcrm_auth') === '1');
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
   const [status, setStatus] = useState('disconnected');
   const [qr, setQr] = useState(null);
@@ -15,7 +17,7 @@ export default function App() {
   const [activeJid, setActiveJid] = useState(null);
   const [page, setPage] = useState('chats');
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all'); // 'all' | 'unread' | 'groups'
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -23,6 +25,7 @@ export default function App() {
   }, [dark]);
 
   useEffect(() => {
+    if (!authed) return;
     fetch('/api/conversations').then(r => r.json()).then(setConversations).catch(() => {});
     fetch('/api/status').then(r => r.json()).then(d => setStatus(d.status)).catch(() => {});
 
@@ -41,7 +44,39 @@ export default function App() {
     });
 
     return () => { socket.off('status'); socket.off('qr'); socket.off('conversation_update'); };
-  }, []);
+  }, [authed]);
+
+  // Keyboard navigation: Escape goes back; browser back button support
+  useEffect(() => {
+    if (!authed) return;
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        if (showQR) { setShowQR(false); return; }
+        if (page === 'settings') { setPage('chats'); return; }
+        if (activeJid) { setActiveJid(null); return; }
+      }
+    };
+
+    const onPop = () => {
+      if (showQR) { setShowQR(false); return; }
+      if (page === 'settings') { setPage('chats'); history.pushState(null, ''); return; }
+      if (activeJid) { setActiveJid(null); history.pushState(null, ''); return; }
+    };
+
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('popstate', onPop);
+    };
+  }, [authed, showQR, page, activeJid]);
+
+  // Push a history entry whenever navigating so browser back has something to pop
+  useEffect(() => {
+    if (!authed) return;
+    history.pushState(null, '');
+  }, [page, activeJid, authed]);
 
   const handleConnect = useCallback(() => {
     setShowQR(true);
@@ -62,6 +97,11 @@ export default function App() {
     setConversations(prev => prev.map(c => c.jid === jid ? { ...c, unread: 0 } : c));
   }, []);
 
+  const goToChats = useCallback(() => {
+    setPage('chats');
+    setActiveJid(null);
+  }, []);
+
   const filtered = conversations.filter(c => {
     const matchesSearch = (c.name || c.phone || '').toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
@@ -70,6 +110,10 @@ export default function App() {
     return true;
   });
   const activeConv = conversations.find(c => c.jid === activeJid);
+
+  if (!authed) {
+    return <LoginScreen onAuth={() => setAuthed(true)} />;
+  }
 
   return (
     <div className="h-screen w-screen flex bg-bg-light dark:bg-bg-dark overflow-hidden">
@@ -81,6 +125,7 @@ export default function App() {
           setDark={setDark}
           page={page}
           setPage={setPage}
+          onLogoClick={goToChats}
         />
         {page === 'chats' && (
           <ConversationList
@@ -106,7 +151,7 @@ export default function App() {
       {/* Right panel */}
       <div className="flex-1 flex flex-col h-full bg-chat-light dark:bg-chat-dark">
         {activeConv ? (
-          <ChatWindow conv={activeConv} status={status} />
+          <ChatWindow conv={activeConv} status={status} onBack={() => setActiveJid(null)} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center select-none gap-4">
             <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center">
@@ -117,15 +162,9 @@ export default function App() {
               <p className="text-sm text-slate-400 mt-1 max-w-xs">
                 {status === 'connected'
                   ? 'Selecione uma conversa para começar a responder'
-                  : 'Conecte o WhatsApp via QR Code para ver as conversas'}
+                  : 'Conecte o WhatsApp via QR Code nas Definições'}
               </p>
             </div>
-            {status !== 'connected' && (
-              <button onClick={handleConnect} className="btn-primary flex items-center gap-2 mt-2">
-                <span className="material-icons-outlined text-lg">qr_code_scanner</span>
-                Conectar WhatsApp
-              </button>
-            )}
           </div>
         )}
       </div>
