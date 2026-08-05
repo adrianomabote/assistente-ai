@@ -151,28 +151,33 @@ export default function ConversationList({
 
       {/* Filter tabs */}
       {!selectMode && (
-        <div className="flex gap-1.5 px-3 py-2 bg-white dark:bg-[#111b21] border-b border-slate-100 dark:border-slate-700/40 overflow-x-auto no-scrollbar">
+        <div className="flex items-stretch bg-white dark:bg-[#111b21] border-b border-slate-100 dark:border-slate-700/40">
           {FILTERS.map(f => {
             const active = filter === f.id;
             const count = counts[f.id];
             return (
               <button key={f.id} onClick={() => setFilter(f.id)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  active ? 'bg-primary text-white shadow-sm' : 'bg-[#f0f2f5] dark:bg-[#202c33] text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#2a3942]'
+                className={`flex-1 flex items-center justify-center gap-1 py-2.5 text-xs font-semibold transition-colors relative ${
+                  active
+                    ? 'text-primary'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                 }`}
               >
                 {f.label}
                 {count != null && (
-                  <span className={`text-[10px] font-semibold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
-                    active ? 'bg-white/30 text-white' : 'bg-primary text-white'
-                  }`}>{count > 99 ? '99+' : count}</span>
+                  <span className="bg-primary text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+                {active && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
                 )}
               </button>
             );
           })}
           {/* Mark all read shortcut */}
           <button onClick={onMarkAllRead} title="Marcar todas como lidas"
-            className="flex-shrink-0 ml-auto flex items-center gap-1 px-2 py-1 rounded-full text-xs text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors">
+            className="px-2 flex items-center text-slate-400 hover:text-primary transition-colors">
             <span className="material-icons-outlined text-base">done_all</span>
           </button>
         </div>

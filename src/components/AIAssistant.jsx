@@ -6,7 +6,7 @@ function Message({ msg }) {
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       {!isUser && (
         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mr-2 mt-0.5 shadow-sm">
-          <span className="material-icons-outlined text-white text-base">smart_toy</span>
+          <span className="material-icons-outlined text-white text-base">android</span>
         </div>
       )}
       <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
@@ -100,7 +100,7 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
             </button>
           )}
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-sm">
-            <span className="material-icons-outlined text-white text-lg">smart_toy</span>
+            <span className="material-icons-outlined text-white text-lg">android</span>
           </div>
           <div>
             <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>
@@ -147,7 +147,7 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
         {loading && (
           <div className="flex items-start gap-2 mb-3">
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mr-2 shadow-sm">
-              <span className="material-icons-outlined text-white text-base">smart_toy</span>
+              <span className="material-icons-outlined text-white text-base">android</span>
             </div>
             <div className="bg-white dark:bg-[#202c33] px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
               <div className="flex gap-1 items-center h-5">
