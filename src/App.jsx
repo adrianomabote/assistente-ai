@@ -192,7 +192,7 @@ export default function App() {
             {/* Desktop: placeholder pointing to right panel */}
             <div className="flex-1 hidden md:flex flex-col items-center justify-center p-6 gap-3 text-center">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="material-icons-outlined text-primary text-3xl">android</span>
+                <span className="material-icons-outlined text-primary text-3xl">support_agent</span>
               </div>
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistente aberto</p>
               <p className="text-xs text-slate-400">O assistente está no painel principal →</p>
