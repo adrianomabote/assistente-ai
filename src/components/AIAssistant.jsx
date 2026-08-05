@@ -29,7 +29,7 @@ const SUGGESTIONS = [
   'Há algum cliente sem resposta?',
 ];
 
-export default function AIAssistant({ onBack }) {
+export default function AIAssistant({ onBack, hideHeader = false }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -88,34 +88,36 @@ export default function AIAssistant({ onBack }) {
 
   return (
     <div className="flex flex-col h-full bg-chat-light dark:bg-chat-dark">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-3.5 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-slate-200 dark:border-slate-700/50 flex-shrink-0">
-        {onBack && (
+      {/* Header — hidden on mobile when embedded below the ZapCRM header */}
+      {!hideHeader && (
+        <div className="flex items-center gap-3 px-5 py-3.5 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-slate-200 dark:border-slate-700/50 flex-shrink-0">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden p-1.5 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors flex-shrink-0"
+            >
+              <span className="material-icons-outlined text-xl">arrow_back</span>
+            </button>
+          )}
+          <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-sm">
+            <span className="material-icons-outlined text-white text-lg">smart_toy</span>
+          </div>
+          <div>
+            <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>
+            <p className="text-xs text-slate-400 mt-0.5">Análise e relatórios das tuas conversas</p>
+          </div>
           <button
-            onClick={onBack}
-            className="md:hidden p-1.5 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors flex-shrink-0"
+            onClick={() => setMessages([{
+              role: 'assistant',
+              content: 'Olá! 👋 Sou o assistente do ZapCRM. O que queres saber?',
+            }])}
+            title="Limpar conversa"
+            className="ml-auto p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 transition-colors"
           >
-            <span className="material-icons-outlined text-xl">arrow_back</span>
+            <span className="material-icons-outlined text-xl">refresh</span>
           </button>
-        )}
-        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-sm">
-          <span className="material-icons-outlined text-white text-lg">smart_toy</span>
         </div>
-        <div>
-          <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>
-          <p className="text-xs text-slate-400 mt-0.5">Análise e relatórios das tuas conversas</p>
-        </div>
-        <button
-          onClick={() => setMessages([{
-            role: 'assistant',
-            content: 'Olá! 👋 Sou o assistente do ZapCRM. O que queres saber?',
-          }])}
-          title="Limpar conversa"
-          className="ml-auto p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 transition-colors"
-        >
-          <span className="material-icons-outlined text-xl">refresh</span>
-        </button>
-      </div>
+      )}
 
       {!hasToken && (
         <div className="mx-4 mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-start gap-2">

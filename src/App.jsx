@@ -136,8 +136,9 @@ export default function App() {
 
   const activeConv = conversations.find(c => c.jid === activeJid);
 
-  // On mobile: right panel is active when viewing a chat or the AI assistant
-  const mobileRightActive = !!activeConv || page === 'ai';
+  // On mobile: right panel is active only when a chat is open
+  // (AI and Settings stay in the left panel so the ZapCRM header stays visible)
+  const mobileRightActive = !!activeConv;
 
   if (!authed) return <LoginScreen onAuth={() => setAuthed(true)} />;
 
@@ -181,15 +182,22 @@ export default function App() {
           <Settings status={status} onDisconnect={handleDisconnect} onConnect={handleConnect} />
         )}
 
-        {/* Desktop-only: placeholder when AI panel is open in right panel */}
+        {/* Mobile: AI assistant shown here so the ZapCRM header stays visible */}
         {page === 'ai' && (
-          <div className="flex-1 hidden md:flex flex-col items-center justify-center p-6 gap-3 text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="material-icons-outlined text-primary text-3xl">smart_toy</span>
+          <>
+            {/* Mobile: full AI panel below the header */}
+            <div className="flex-1 flex flex-col overflow-hidden md:hidden">
+              <AIAssistant onBack={() => setPage('chats')} hideHeader />
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistente aberto</p>
-            <p className="text-xs text-slate-400">O assistente está no painel principal →</p>
-          </div>
+            {/* Desktop: placeholder pointing to right panel */}
+            <div className="flex-1 hidden md:flex flex-col items-center justify-center p-6 gap-3 text-center">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="material-icons-outlined text-primary text-3xl">smart_toy</span>
+              </div>
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistente aberto</p>
+              <p className="text-xs text-slate-400">O assistente está no painel principal →</p>
+            </div>
+          </>
         )}
       </div>
 
