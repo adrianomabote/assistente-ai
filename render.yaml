@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: zapmcrm
+    runtime: node
+    region: frankfurt  # muda para a região mais próxima de ti
+    plan: starter      # starter (pago) tem disco persistente; free não tem
+
+    buildCommand: |
+      apt-get install -y chromium-browser 2>/dev/null || true
+      npm install
+      npm run build
+
+    startCommand: npm start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_PASSWORD
+        generateValue: false   # define manualmente no dashboard do Render
+        # Coloca a tua senha em: Dashboard → Environment → APP_PASSWORD
+      - key: DATA_DIR
+        value: /data
+
+    disk:
+      name: zapmcrm-data
+      mountPath: /data
+      sizeGB: 1

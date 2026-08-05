@@ -4,11 +4,18 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import axios from 'axios';
 import pkg from 'whatsapp-web.js';
 import QRCode from 'qrcode';
 
 const { Client, LocalAuth } = pkg;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const IS_PROD = process.env.NODE_ENV === 'production';
 
 const app = express();
 const httpServer = createServer(app);
@@ -18,9 +25,11 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
-if (!existsSync('./data')) mkdirSync('./data', { recursive: true });
+const DATA_DIR = process.env.DATA_DIR || './data';
+if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 
-const DATA_FILE = './data/data.json';
+const DATA_FILE = join(DATA_DIR, 'data.json');
+const AUTH_DIR  = join(DATA_DIR, 'auth');
 
 const loadData = () => {
   try {
@@ -116,13 +125,33 @@ async function getAIReply(conv, incomingText) {
   return response.data.choices[0].message.content.trim();
 }
 
+// ─── Chromium path detection ──────────────────────────────────────────────────
+function findChromium() {
+  const candidates = ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome'];
+  for (const bin of candidates) {
+    try { return execSync(`which ${bin}`).toString().trim(); } catch {}
+  }
+  // Fallback: common Linux paths (e.g. Render / Ubuntu)
+  const paths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/snap/bin/chromium',
+  ];
+  for (const p of paths) {
+    if (existsSync(p)) return p;
+  }
+  return undefined;
+}
+
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 async function connectWhatsApp() {
   client = new Client({
-    authStrategy: new LocalAuth({ dataPath: './auth' }),
+    authStrategy: new LocalAuth({ dataPath: AUTH_DIR }),
     puppeteer: {
       headless: true,
-      executablePath: (() => { try { return execSync('which chromium').toString().trim(); } catch { return undefined; } })(),
+      executablePath: findChromium(),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -245,6 +274,24 @@ async function connectWhatsApp() {
 
   await client.initialize();
 }
+
+// ─── Serve built frontend in production ───────────────────────────────────────
+if (IS_PROD) {
+  const dist = join(__dirname, 'dist');
+  if (existsSync(dist)) {
+    app.use(express.static(dist));
+    app.get(/^(?!\/api|\/socket\.io|\/webhook).*$/, (_, res) =>
+      res.sendFile(join(dist, 'index.html'))
+    );
+  }
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+app.post('/api/auth', (req, res) => {
+  const { password } = req.body;
+  const expected = process.env.APP_PASSWORD || '00220022aA1';
+  res.json({ ok: password === expected });
+});
 
 // ─── REST API ─────────────────────────────────────────────────────────────────
 app.get('/api/status', (_, res) => res.json({ status: connectionStatus }));
@@ -457,7 +504,7 @@ io.on('connection', (socket) => {
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   try {

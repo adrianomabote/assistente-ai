@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# WhatsApp session — contém dados de autenticação do teu número
+auth/
+
+# Dados locais (em produção usa o disco persistente do Render)
+data/
+
+# Cache e logs
+.cache/
+*.log
