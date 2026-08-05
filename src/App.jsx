@@ -29,9 +29,8 @@ export default function App() {
     socket.on('status', (s) => {
       setStatus(s);
       if (s === 'connected') setShowQR(false);
-      if (s === 'qr') setShowQR(true);
     });
-    socket.on('qr', (q) => { if (q) { setQr(q); setShowQR(true); } });
+    socket.on('qr', (q) => { setQr(q || null); });
     socket.on('conversation_update', (conv) => {
       setConversations(prev => {
         const idx = prev.findIndex(c => c.jid === conv.jid);
@@ -82,7 +81,6 @@ export default function App() {
           setDark={setDark}
           page={page}
           setPage={setPage}
-          onConnectClick={handleConnect}
         />
         {page === 'chats' && (
           <ConversationList
@@ -115,7 +113,7 @@ export default function App() {
               <span className="material-icons-outlined text-primary" style={{ fontSize: 48 }}>chat</span>
             </div>
             <div className="text-center">
-              <p className="text-xl font-semibold text-slate-600 dark:text-slate-300">WhatsApp CRM</p>
+              <p className="text-xl font-semibold text-slate-600 dark:text-slate-300">ZapCRM</p>
               <p className="text-sm text-slate-400 mt-1 max-w-xs">
                 {status === 'connected'
                   ? 'Selecione uma conversa para começar a responder'
