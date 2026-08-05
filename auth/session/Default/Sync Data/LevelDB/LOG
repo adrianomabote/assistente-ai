@@ -1,1 +1,3 @@
-2026/08/05-08:42:05.264 551 Reusing MANIFEST /home/runner/workspace/auth/session/Default/Sync Data/LevelDB/MANIFEST-000001
+2026/08/05-09:14:46.089 173 Reusing MANIFEST /home/runner/workspace/auth/session/Default/Sync Data/LevelDB/MANIFEST-000001
+2026/08/05-09:14:46.359 173 Recovering log #3
+2026/08/05-09:14:46.360 173 Reusing old log /home/runner/workspace/auth/session/Default/Sync Data/LevelDB/000003.log 

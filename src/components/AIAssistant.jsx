@@ -94,7 +94,7 @@ export default function AIAssistant() {
           <span className="material-icons-outlined text-white text-lg">auto_awesome</span>
         </div>
         <div>
-          <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente IA</p>
+          <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>
           <p className="text-xs text-slate-400 mt-0.5">Análise e relatórios das tuas conversas</p>
         </div>
         <button
