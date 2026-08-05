@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 function Message({ msg }) {
   const isUser = msg.role === 'user';
@@ -39,8 +39,49 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasToken, setHasToken] = useState(true);
+  const [listening, setListening] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  const startVoice = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert('O teu browser não suporta reconhecimento de voz. Usa Chrome ou Edge.'); return; }
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    recognitionRef.current = rec;
+    setListening(true);
+    rec.onresult = (e) => {
+      const transcript = e.results[0][0].transcript;
+      setListening(false);
+      // send directly
+      const q = transcript.trim();
+      if (!q) return;
+      setMessages(prev => [...prev, { role: 'user', content: q }]);
+      setLoading(true);
+      fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: q, history: messages }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.error) throw new Error(data.error);
+          setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+        })
+        .catch(e => setMessages(prev => [...prev, { role: 'assistant', content: `❌ Erro: ${e.message}` }]))
+        .finally(() => setLoading(false));
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    rec.start();
+  }, [listening, messages]);
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(s => {
@@ -169,12 +210,27 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
             value={input}
             onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
             onKeyDown={onKey}
-            placeholder="Pergunta sobre as tuas conversas..."
+            placeholder={listening ? 'A ouvir...' : 'Pergunta sobre as tuas conversas...'}
             rows={1}
             className="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none resize-none leading-relaxed"
             style={{ minHeight: '24px', maxHeight: '120px' }}
           />
         </div>
+        {/* Mic button */}
+        <button
+          onClick={startVoice}
+          title={listening ? 'Parar gravação' : 'Falar com o assistente'}
+          className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all shadow-sm ${
+            listening
+              ? 'bg-red-500 hover:bg-red-600 animate-pulse'
+              : 'bg-slate-200 dark:bg-[#2a3942] hover:bg-slate-300 dark:hover:bg-[#3d4f59] text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <span className="material-icons-outlined text-xl" style={{ color: listening ? 'white' : undefined }}>
+            {listening ? 'stop' : 'mic'}
+          </span>
+        </button>
+        {/* Send button */}
         <button
           onClick={() => send()}
           disabled={!input.trim() || loading}
