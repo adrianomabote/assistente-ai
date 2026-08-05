@@ -294,6 +294,24 @@ app.post('/api/settings', (req, res) => {
 });
 
 // ── Bulk conversation actions ─────────────────────────────────────────────────
+// ── Contact info (real-time from whatsapp-web.js) ─────────────────────────────
+app.get('/api/conversations/:jid/contact', async (req, res) => {
+  if (!client || connectionStatus !== 'connected') return res.json({ ok: false, reason: 'disconnected' });
+  try {
+    const jid = decodeURIComponent(req.params.jid);
+    const contact = await client.getContactById(jid);
+    res.json({
+      ok: true,
+      name: contact.name || null,
+      pushname: contact.pushname || null,
+      number: contact.number || null,
+      isMyContact: contact.isMyContact || false,
+    });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/conversations/bulk-delete', (req, res) => {
   const { jids = [] } = req.body;
   for (const jid of jids) delete appData.conversations[jid];
@@ -329,7 +347,7 @@ app.post('/api/conversations/read-all', (_, res) => {
 
 // ── AI Assistant chat ─────────────────────────────────────────────────────────
 app.post('/api/ai/chat', async (req, res) => {
-  const { message } = req.body;
+  const { message, history = [] } = req.body;
   const { aiToken, aiModel } = appData.settings;
 
   if (!aiToken) return res.status(400).json({ error: 'Token OpenAI não configurado nas Definições.' });
@@ -392,12 +410,19 @@ ${recentSummary || 'Nenhuma conversa ainda.'}
 
 Responde à pergunta do utilizador com base nestes dados.`;
 
+    // Build multi-turn conversation: system + prior history + new user message
+    const priorHistory = (history || []).slice(-20).map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    }));
+
     const response = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
         model: aiModel || 'gpt-4o-mini',
         messages: [
           { role: 'system', content: systemPrompt },
+          ...priorHistory,
           { role: 'user', content: message },
         ],
         max_tokens: 800,

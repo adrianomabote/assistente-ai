@@ -62,10 +62,12 @@ export default function AIAssistant() {
     setLoading(true);
 
     try {
+      // Send prior conversation history so the AI has multi-turn memory
+      const history = messages.filter(m => m.role !== 'assistant' || messages.indexOf(m) > 0);
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q }),
+        body: JSON.stringify({ message: q, history }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);

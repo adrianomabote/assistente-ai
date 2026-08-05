@@ -1,6 +1,20 @@
+import { useState, useEffect } from 'react';
+
 export default function ContactProfile({ conv, onClose }) {
-  const name = conv.name || conv.phone;
-  const phone = conv.phone;
+  const [contactInfo, setContactInfo] = useState(null);
+
+  useEffect(() => {
+    // Try to fetch real-time contact info from whatsapp-web.js
+    fetch(`/api/conversations/${encodeURIComponent(conv.jid)}/contact`)
+      .then(r => r.json())
+      .then(data => { if (data.ok) setContactInfo(data); })
+      .catch(() => {});
+  }, [conv.jid]);
+
+  // Use real contact info when available, fall back to stored data
+  const name = contactInfo?.name || contactInfo?.pushname || conv.name || conv.phone;
+  const phone = contactInfo?.number || conv.phone;
+  const isMyContact = contactInfo?.isMyContact ?? false;
 
   const colors = ['bg-rose-400','bg-pink-500','bg-purple-500','bg-indigo-500','bg-blue-500','bg-teal-500','bg-emerald-500','bg-orange-400','bg-amber-500'];
   const color = colors[(name || '').charCodeAt(0) % colors.length];
@@ -37,8 +51,12 @@ export default function ContactProfile({ conv, onClose }) {
               <div className="flex items-start gap-4">
                 <span className="material-icons-outlined text-primary text-2xl mt-0.5">phone</span>
                 <div className="flex-1">
-                  <p className="text-sm text-slate-800 dark:text-slate-100 font-medium">+{phone}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Celular</p>
+                  <p className="text-sm text-slate-800 dark:text-slate-100 font-medium">
+                    {phone ? `+${phone}` : '—'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {isMyContact ? 'Salvo nos contactos' : 'Celular'}
+                  </p>
                 </div>
                 <a href={`https://wa.me/${phone}`} target="_blank" rel="noreferrer" className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-primary transition-colors">
                   <span className="material-icons-outlined text-lg">chat</span>
