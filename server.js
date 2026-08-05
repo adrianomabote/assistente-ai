@@ -149,7 +149,18 @@ async function connectWhatsApp() {
 
       // Auto-reply
       if (!fromMe && appData.settings.botEnabled && !conv.isGroup) {
-        const reply = appData.settings.botMessage || 'Olá!';
+        // Check keyword rules first
+        let reply = appData.settings.botMessage || 'Olá!';
+        if (appData.settings.keywordsEnabled && Array.isArray(appData.settings.keywords)) {
+          const lowerText = text.toLowerCase();
+          for (const rule of appData.settings.keywords) {
+            const kws = (rule.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+            if (kws.some(kw => lowerText.includes(kw))) {
+              reply = rule.reply;
+              break;
+            }
+          }
+        }
         setTimeout(async () => {
           try {
             await sock.sendMessage(jid, { text: reply });

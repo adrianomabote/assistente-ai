@@ -5,18 +5,41 @@
 * { box-sizing: border-box; }
 body { font-family: 'Inter', sans-serif; margin: 0; overflow: hidden; }
 
+/* Scrollbar */
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #2a3942; }
 
-.material-icons-outlined { font-family: 'Material Icons Outlined'; font-style: normal; font-size: 24px; line-height: 1; display: inline-block; }
+/* Material Icons */
+.material-icons-outlined {
+  font-family: 'Material Icons Outlined';
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  display: inline-block;
+  letter-spacing: normal;
+  word-wrap: normal;
+  white-space: nowrap;
+  direction: ltr;
+}
+
+/* WhatsApp chat wallpaper */
+.chat-bg {
+  background-color: #efeae2;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4c9b8' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.dark .chat-bg {
+  background-color: #0b141a;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23182229' fill-opacity='0.6'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
 
 @layer components {
   .btn-primary {
-    @apply bg-primary hover:bg-primary-dark text-white font-medium px-4 py-2 rounded-lg transition-colors;
+    @apply bg-[#25D366] hover:bg-[#128C7E] text-white font-semibold px-5 py-2.5 rounded-xl transition-colors shadow-sm;
   }
   .input-field {
-    @apply w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary text-sm;
+    @apply w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-[#25D366]/50;
   }
 }

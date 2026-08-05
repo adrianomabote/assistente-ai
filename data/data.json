@@ -1,0 +1,129 @@
+{
+  "conversations": {
+    "258876563910@s.whatsapp.net": {
+      "jid": "258876563910@s.whatsapp.net",
+      "phone": "258876563910",
+      "name": "258876563910",
+      "isGroup": false,
+      "messages": [
+        {
+          "id": "A50AF101AE70CC537283D0F91AEAEA3C",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887168,
+          "status": "received"
+        },
+        {
+          "id": "A5670BA187DAB90762CD12A758B7AAEF",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887168,
+          "status": "received"
+        },
+        {
+          "id": "A55EE86434C9FEA49C7A56CAA30C5738",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887168,
+          "status": "received"
+        },
+        {
+          "id": "A56E52F75474E99A01727FA488AE1B7C",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887168,
+          "status": "received"
+        },
+        {
+          "id": "A52FA43A1210984AAA8FC6CEE8A616E1",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887169,
+          "status": "received"
+        },
+        {
+          "id": "A596670858D19AEEC373D48FEC205EE6",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887171,
+          "status": "received"
+        },
+        {
+          "id": "A510FFD9EDE1F5B97B2A35AA1AA08CAA",
+          "text": "[Mensagem]",
+          "fromMe": true,
+          "timestamp": 1785887173,
+          "status": "received"
+        }
+      ],
+      "unread": 0,
+      "lastMessage": "[Mensagem]",
+      "lastTimestamp": 1785887173
+    },
+    "223953016639611@lid": {
+      "jid": "223953016639611@lid",
+      "phone": "223953016639611@lid",
+      "name": "Adriano258",
+      "isGroup": false,
+      "messages": [
+        {
+          "id": "A5B82B2EFCEEAE46C3DAD8C80FAC6F4B",
+          "text": "Khj",
+          "fromMe": true,
+          "timestamp": 1785887198,
+          "status": "received"
+        },
+        {
+          "id": "manual_1785887213465",
+          "text": "oi",
+          "fromMe": true,
+          "timestamp": 1785887213,
+          "status": "sent"
+        },
+        {
+          "id": "3EB03C61ED28DA6A08025C",
+          "text": "oi",
+          "fromMe": true,
+          "timestamp": 1785887213,
+          "status": 2
+        },
+        {
+          "id": "manual_1785887247880",
+          "text": "oi",
+          "fromMe": true,
+          "timestamp": 1785887247,
+          "status": "sent"
+        },
+        {
+          "id": "3EB0D7C562727A4B1A8B2E",
+          "text": "oi",
+          "fromMe": true,
+          "timestamp": 1785887247,
+          "status": 2
+        },
+        {
+          "id": "manual_1785887250304",
+          "text": "teste",
+          "fromMe": true,
+          "timestamp": 1785887250,
+          "status": "sent"
+        },
+        {
+          "id": "3EB05D3E71E997E0A558EE",
+          "text": "teste",
+          "fromMe": true,
+          "timestamp": 1785887250,
+          "status": 2
+        }
+      ],
+      "unread": 0,
+      "lastMessage": "teste",
+      "lastTimestamp": 1785887250
+    }
+  },
+  "settings": {
+    "botEnabled": false,
+    "botName": "Assistente",
+    "botMessage": "Olá! Como posso ajudar você hoje?"
+  }
+}
