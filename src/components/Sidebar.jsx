@@ -44,7 +44,7 @@ export default function Sidebar({ status, dark, setDark, page, setPage, onLogoCl
       </button>
 
       <div className="flex items-center gap-0.5">
-        {navBtn('ai', 'auto_awesome', 'Assistente')}
+        {navBtn('ai', 'smart_toy', 'Assistente')}
         {navBtn('settings', 'settings', 'Definições')}
         <button
           onClick={() => setDark(!dark)}

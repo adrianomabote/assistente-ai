@@ -29,7 +29,7 @@ const SUGGESTIONS = [
   'Há algum cliente sem resposta?',
 ];
 
-export default function AIAssistant() {
+export default function AIAssistant({ onBack }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
@@ -90,8 +90,16 @@ export default function AIAssistant() {
     <div className="flex flex-col h-full bg-chat-light dark:bg-chat-dark">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-3.5 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-slate-200 dark:border-slate-700/50 flex-shrink-0">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden p-1.5 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors flex-shrink-0"
+          >
+            <span className="material-icons-outlined text-xl">arrow_back</span>
+          </button>
+        )}
         <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-sm">
-          <span className="material-icons-outlined text-white text-lg">auto_awesome</span>
+          <span className="material-icons-outlined text-white text-lg">smart_toy</span>
         </div>
         <div>
           <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>

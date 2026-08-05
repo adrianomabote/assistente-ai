@@ -18,7 +18,7 @@ export default function App() {
   const [activeJid, setActiveJid] = useState(null);
   const [page, setPage] = useState('chats'); // 'chats' | 'settings' | 'ai'
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all'); // 'all' | 'unread' | 'groups' | 'archived'
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -53,14 +53,14 @@ export default function App() {
     const onKey = (e) => {
       if (e.key === 'Escape') {
         if (showQR) { setShowQR(false); return; }
-        if (page !== 'chats') { setPage('chats'); return; }
         if (activeJid) { setActiveJid(null); return; }
+        if (page !== 'chats') { setPage('chats'); return; }
       }
     };
     const onPop = () => {
       if (showQR) { setShowQR(false); history.pushState(null, ''); return; }
-      if (page !== 'chats') { setPage('chats'); history.pushState(null, ''); return; }
       if (activeJid) { setActiveJid(null); history.pushState(null, ''); return; }
+      if (page !== 'chats') { setPage('chats'); history.pushState(null, ''); return; }
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('popstate', onPop);
@@ -86,6 +86,7 @@ export default function App() {
   }, []);
 
   const goToChats = useCallback(() => { setPage('chats'); setActiveJid(null); }, []);
+  const goBack = useCallback(() => { setActiveJid(null); }, []);
 
   // ── Conversation bulk actions ──────────────────────────────────────────────
   const handleDeleteConvs = useCallback(async (jids) => {
@@ -127,7 +128,7 @@ export default function App() {
     const matchesSearch = (c.name || c.phone || '').toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
     if (filter === 'archived') return !!c.archived;
-    if (c.archived) return false; // hide archived in other views
+    if (c.archived) return false;
     if (filter === 'unread') return c.unread > 0;
     if (filter === 'groups') return c.isGroup;
     return true;
@@ -135,12 +136,21 @@ export default function App() {
 
   const activeConv = conversations.find(c => c.jid === activeJid);
 
+  // On mobile: right panel is active when viewing a chat or the AI assistant
+  const mobileRightActive = !!activeConv || page === 'ai';
+
   if (!authed) return <LoginScreen onAuth={() => setAuthed(true)} />;
 
   return (
     <div className="h-screen w-screen flex bg-bg-light dark:bg-bg-dark overflow-hidden">
-      {/* Left panel */}
-      <div className="flex h-full w-[360px] flex-shrink-0 flex-col border-r border-slate-200 dark:border-slate-700/60 shadow-sm">
+
+      {/* ── LEFT PANEL ──────────────────────────────────────────────────────────
+          Desktop: fixed 360px width, always visible
+          Mobile:  full width, hidden when chat or AI is open              */}
+      <div className={`flex flex-col h-full border-r border-slate-200 dark:border-slate-700/60 shadow-sm
+        md:w-[360px] md:flex-shrink-0 md:flex
+        ${mobileRightActive ? 'hidden' : 'flex w-full'}`}>
+
         <Sidebar
           status={status}
           dark={dark}
@@ -149,6 +159,7 @@ export default function App() {
           setPage={setPage}
           onLogoClick={goToChats}
         />
+
         {page === 'chats' && (
           <ConversationList
             conversations={filtered}
@@ -165,27 +176,36 @@ export default function App() {
             onMarkAllRead={handleMarkAllRead}
           />
         )}
+
         {page === 'settings' && (
           <Settings status={status} onDisconnect={handleDisconnect} onConnect={handleConnect} />
         )}
+
+        {/* Desktop-only: placeholder when AI panel is open in right panel */}
         {page === 'ai' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 gap-3 text-center">
+          <div className="flex-1 hidden md:flex flex-col items-center justify-center p-6 gap-3 text-center">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="material-icons-outlined text-primary text-3xl">auto_awesome</span>
+              <span className="material-icons-outlined text-primary text-3xl">smart_toy</span>
             </div>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistente IA aberto</p>
-            <p className="text-xs text-slate-400">O chat com a IA está no painel principal →</p>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistente aberto</p>
+            <p className="text-xs text-slate-400">O assistente está no painel principal →</p>
           </div>
         )}
       </div>
 
-      {/* Right panel */}
-      <div className="flex-1 flex flex-col h-full bg-chat-light dark:bg-chat-dark">
+      {/* ── RIGHT PANEL ─────────────────────────────────────────────────────────
+          Desktop: flex-1, always visible
+          Mobile:  full width, only visible when chat or AI is open         */}
+      <div className={`flex flex-col h-full flex-1 bg-chat-light dark:bg-chat-dark
+        md:flex
+        ${mobileRightActive ? 'flex' : 'hidden'}`}>
+
         {page === 'ai' ? (
-          <AIAssistant />
+          <AIAssistant onBack={() => setPage('chats')} />
         ) : activeConv ? (
-          <ChatWindow conv={activeConv} status={status} onBack={() => setActiveJid(null)} />
+          <ChatWindow conv={activeConv} status={status} onBack={goBack} />
         ) : (
+          /* Desktop empty state */
           <div className="flex-1 flex flex-col items-center justify-center select-none gap-4">
             <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center">
               <span className="material-icons-outlined text-primary" style={{ fontSize: 48 }}>chat</span>
