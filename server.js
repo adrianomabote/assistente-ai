@@ -387,11 +387,12 @@ app.post('/api/ai/chat', async (req, res) => {
       ? todayMsgs.map(m => `  [${m.fromMe ? 'Eu' : m.conv}]: ${m.text}`).join('\n')
       : '  Nenhuma mensagem hoje.';
 
+    const customInstructions = appData.settings.aiSystemPrompt?.trim();
     const systemPrompt = `És o assistente inteligente do ZapCRM — um CRM de WhatsApp.
 O utilizador que está a falar contigo é o CHEFE — o dono e responsável máximo pelo CRM. Trata-o com respeito e dá-lhe prioridade total.
 Tens acesso ao resumo completo das conversas do utilizador e deves ajudá-lo a analisar, resumir, identificar padrões e responder perguntas sobre os seus clientes e interações.
 Responde sempre em português (de Portugal). Sê direto, útil e profissional.
-
+${customInstructions ? `\nInstruções personalizadas do utilizador:\n${customInstructions}\n` : ''}
 === DADOS ACTUAIS DO CRM ===
 Data/hora actual: ${new Date().toLocaleString('pt-PT')}
 
@@ -459,5 +460,9 @@ io.on('connection', (socket) => {
 const PORT = 3001;
 httpServer.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
-  await connectWhatsApp();
+  try {
+    await connectWhatsApp();
+  } catch (e) {
+    console.warn('WhatsApp auto-connect skipped (Chromium unavailable):', e.message);
+  }
 });

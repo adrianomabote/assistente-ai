@@ -67,7 +67,7 @@ export default function Settings({ status, onDisconnect, onConnect }) {
 
         {/* ── IA tab ─────────────────────────────────── */}
         {activeTab === 'ia' && (
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-4 pb-2">
 
             {/* Enable toggle */}
             <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
@@ -146,14 +146,6 @@ export default function Settings({ status, onDisconnect, onConnect }) {
                 />
               </div>
             </div>
-
-            <button onClick={save} disabled={loading}
-              className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
-              {loading
-                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : <span className="material-icons-outlined text-lg">save</span>}
-              {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
-            </button>
           </div>
         )}
 
@@ -208,6 +200,19 @@ export default function Settings({ status, onDisconnect, onConnect }) {
           </div>
         )}
       </div>
+
+      {/* Sticky save button — always visible at bottom of IA tab */}
+      {activeTab === 'ia' && (
+        <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-[#111b21] border-t border-slate-100 dark:border-slate-700/40">
+          <button onClick={save} disabled={loading}
+            className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm active:scale-95">
+            {loading
+              ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <span className="material-icons-outlined text-lg">save</span>}
+            {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

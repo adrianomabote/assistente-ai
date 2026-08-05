@@ -1,5 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+const STORAGE_KEY = 'zapcrm_ai_messages';
+const INITIAL_MSG = {
+  role: 'assistant',
+  content: 'Olá chefe! 👋 Sou o assistente do ZapCRM. Podes escrever ou iniciar uma chamada de voz comigo.\n\nO que queres saber?',
+};
+
+function loadMessages() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+  return [INITIAL_MSG];
+}
+
+function saveMessages(msgs) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs)); } catch {}
+}
+
 function Message({ msg }) {
   const isUser = msg.role === 'user';
   return (
@@ -29,45 +50,92 @@ const SUGGESTIONS = [
   'Há algum cliente sem resposta?',
 ];
 
-// ── Voice Call Overlay ──────────────────────────────────────────────────────
-function VoiceCall({ messages, onEnd }) {
-  const [callState, setCallState] = useState('greeting'); // greeting | listening | thinking | speaking | error
-  const [transcript, setTranscript]   = useState('');
-  const [agentText, setAgentText]     = useState('A iniciar chamada…');
+// ── Wave bars component ──────────────────────────────────────────────────────
+// Heights per bar so they look like a natural waveform
+const BAR_HEIGHTS = [14, 26, 38, 22, 44, 18, 34, 28, 16];
 
-  // Use refs so callbacks always see latest values (no stale closures)
-  const callStateRef   = useRef('greeting');
-  const callMsgsRef    = useRef([...messages]);
-  const activeRef      = useRef(true);
+function WaveBars({ state }) {
+  const isActive = state === 'listening' || state === 'speaking';
+  const color =
+    state === 'listening' ? 'bg-green-400' :
+    state === 'speaking'  ? 'bg-blue-400'  : 'bg-slate-600';
+
+  return (
+    <div className="flex items-center gap-1.5 h-12">
+      {BAR_HEIGHTS.map((h, i) => (
+        <div
+          key={i}
+          className={`w-1.5 rounded-full transition-colors duration-300 ${color}`}
+          style={{
+            height: isActive ? `${h}px` : '6px',
+            animation: isActive
+              ? `wave ${0.45 + i * 0.07}s ease-in-out infinite alternate`
+              : 'none',
+            animationDelay: `${i * 0.06}s`,
+            transition: 'height 0.2s ease',
+          }}
+        />
+      ))}
+      <style>{`
+        @keyframes wave {
+          0%   { transform: scaleY(0.3); }
+          50%  { transform: scaleY(1.0); }
+          100% { transform: scaleY(1.7); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ── Voice Call Overlay ──────────────────────────────────────────────────────
+function VoiceCall({ messages, hasToken, onEnd }) {
+  const [callState, setCallState] = useState('greeting');
+  const [transcript, setTranscript] = useState('');
+  const [agentText, setAgentText] = useState('A iniciar chamada…');
+
+  const callStateRef  = useRef('greeting');
+  const callMsgsRef   = useRef([...messages]);
+  const activeRef     = useRef(true);
   const recognitionRef = useRef(null);
-  const synth          = useRef(window.speechSynthesis);
+  const synthRef      = useRef(window.speechSynthesis);
 
   const setState = (s) => { callStateRef.current = s; setCallState(s); };
 
-  // ── speak text then call onDone ──────────────────────────────────────────
+  // ── Speak text then call onDone ─────────────────────────────────────────
   const speak = useCallback((text, onDone) => {
-    synth.current.cancel();
+    synthRef.current.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'pt-BR';
     utter.rate = 1.05;
-    // load voices (may be async on mobile)
-    const tryVoice = () => {
-      const voices = synth.current.getVoices();
+
+    const applyVoice = () => {
+      const voices = synthRef.current.getVoices();
       const pt = voices.find(v => v.lang.startsWith('pt'));
       if (pt) utter.voice = pt;
     };
-    tryVoice();
-    if (synth.current.getVoices().length === 0) {
-      window.speechSynthesis.onvoiceschanged = tryVoice;
+    applyVoice();
+    if (!synthRef.current.getVoices().length) {
+      window.speechSynthesis.addEventListener('voiceschanged', applyVoice, { once: true });
     }
+
     utter.onend   = () => { if (activeRef.current) onDone?.(); };
-    utter.onerror = () => { if (activeRef.current) onDone?.(); };
+    utter.onerror = (e) => {
+      // 'interrupted' is normal when we cancel — just call onDone
+      if (activeRef.current) onDone?.();
+    };
     setState('speaking');
     setAgentText(text);
-    synth.current.speak(utter);
+    synthRef.current.speak(utter);
+
+    // iOS Safari sometimes stalls speech synthesis — nudge it
+    const nudge = setTimeout(() => {
+      if (synthRef.current.speaking) synthRef.current.resume();
+    }, 200);
+    utter.onend = () => { clearTimeout(nudge); if (activeRef.current) onDone?.(); };
+    utter.onerror = () => { clearTimeout(nudge); if (activeRef.current) onDone?.(); };
   }, []);
 
-  // ── start listening ──────────────────────────────────────────────────────
+  // ── Start listening ─────────────────────────────────────────────────────
   const startListening = useCallback(() => {
     if (!activeRef.current) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -95,37 +163,36 @@ function VoiceCall({ messages, onEnd }) {
         rec.abort();
         const q = final.trim();
         setTranscript('');
-        // add user message to ref immediately
         callMsgsRef.current = [...callMsgsRef.current, { role: 'user', content: q }];
         askAI(q);
       }
     };
 
     rec.onerror = (e) => {
-      // no-speech is normal — just restart
       if (!activeRef.current) return;
       if (e.error === 'no-speech' || e.error === 'aborted') return;
       setState('error');
-      setAgentText(`Erro de microfone: ${e.error}`);
+      setAgentText(`Erro de microfone: ${e.error}. Tenta novamente.`);
     };
 
     rec.onend = () => {
       if (!activeRef.current) return;
-      // only auto-restart when we're still in listening mode
       if (callStateRef.current === 'listening') {
-        setTimeout(() => { if (activeRef.current && callStateRef.current === 'listening') startListening(); }, 250);
+        setTimeout(() => {
+          if (activeRef.current && callStateRef.current === 'listening') startListening();
+        }, 300);
       }
     };
 
     try { rec.start(); } catch { /* already started */ }
-  }, []); // stable — uses refs only
+  }, []); // eslint-disable-line
 
-  // ── call OpenAI API ──────────────────────────────────────────────────────
+  // ── Call AI endpoint ────────────────────────────────────────────────────
   const askAI = useCallback(async (q) => {
     setState('thinking');
     setAgentText('A pensar…');
     try {
-      const history = callMsgsRef.current.slice(0, -1); // everything except last user msg
+      const history = callMsgsRef.current.slice(0, -1);
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,42 +204,63 @@ function VoiceCall({ messages, onEnd }) {
       callMsgsRef.current = [...callMsgsRef.current, { role: 'assistant', content: reply }];
       speak(reply, () => { if (activeRef.current) startListening(); });
     } catch (e) {
-      const errMsg = e.message.includes('Token') || e.message.includes('401')
-        ? 'Token OpenAI não configurado. Vai às Definições e adiciona a tua API Key.'
-        : 'Ocorreu um erro com a IA. Tenta novamente.';
+      const errMsg =
+        e.message.includes('Token') || e.message.includes('401') || e.message.includes('não configurado')
+          ? 'Token OpenAI não configurado. Vai às Definições e adiciona a tua API Key.'
+          : `Ocorreu um erro: ${e.message}`;
       setState('error');
       setAgentText(errMsg);
       speak(errMsg, () => { if (activeRef.current) startListening(); });
     }
   }, [speak, startListening]);
 
-  // ── greet on mount ───────────────────────────────────────────────────────
+  // ── Greet on mount ──────────────────────────────────────────────────────
   useEffect(() => {
+    if (!hasToken) {
+      setState('error');
+      const msg = 'Token OpenAI não configurado. Vai às Definições e adiciona a tua API Key.';
+      setAgentText(msg);
+      speak(msg, () => {});
+      return;
+    }
     const greeting = 'Olá chefe! Pode falar, estou a ouvir.';
     speak(greeting, () => { if (activeRef.current) startListening(); });
     return () => {
       activeRef.current = false;
       recognitionRef.current?.abort();
-      synth.current.cancel();
+      synthRef.current.cancel();
     };
   }, []); // eslint-disable-line
 
   const handleEnd = () => {
     activeRef.current = false;
     recognitionRef.current?.abort();
-    synth.current.cancel();
+    synthRef.current.cancel();
     onEnd(callMsgsRef.current);
   };
 
-  const stateLabel = { greeting: 'A iniciar…', listening: 'A ouvir…', thinking: 'A pensar…', speaking: 'A falar…', error: 'Erro' }[callState] || '';
-  const stateColor = { greeting: 'text-slate-400', listening: 'text-green-400', thinking: 'text-amber-400', speaking: 'text-blue-400', error: 'text-red-400' }[callState];
+  const stateLabel = {
+    greeting:  'A iniciar…',
+    listening: 'A ouvir…',
+    thinking:  'A pensar…',
+    speaking:  'A falar…',
+    error:     'Erro',
+  }[callState] || '';
+
+  const stateColor = {
+    greeting:  'text-slate-400',
+    listening: 'text-green-400',
+    thinking:  'text-amber-400',
+    speaking:  'text-blue-400',
+    error:     'text-red-400',
+  }[callState];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0f14]/96 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0f14]/96 backdrop-blur-sm px-4">
       {/* Avatar */}
       <div className="relative mb-6">
         <div className={`w-28 h-28 rounded-full bg-primary flex items-center justify-center shadow-2xl ${
-          callState === 'listening' ? 'ring-4 ring-primary/50 animate-pulse' :
+          callState === 'listening' ? 'ring-4 ring-green-400/50 animate-pulse' :
           callState === 'speaking'  ? 'ring-4 ring-blue-400/50 animate-pulse' : ''
         }`}>
           <span className="material-icons-outlined text-white" style={{ fontSize: 56 }}>support_agent</span>
@@ -184,7 +272,9 @@ function VoiceCall({ messages, onEnd }) {
           callState === 'error'     ? 'bg-red-500'   : 'bg-slate-500'
         }`}>
           <span className="material-icons-outlined" style={{ fontSize: 14 }}>
-            {callState === 'listening' ? 'mic' : callState === 'thinking' ? 'hourglass_empty' : callState === 'speaking' ? 'volume_up' : 'priority_high'}
+            {callState === 'listening' ? 'mic' :
+             callState === 'thinking'  ? 'hourglass_empty' :
+             callState === 'speaking'  ? 'volume_up' : 'priority_high'}
           </span>
         </div>
       </div>
@@ -193,7 +283,7 @@ function VoiceCall({ messages, onEnd }) {
       <p className={`text-sm font-medium mb-6 ${stateColor}`}>{stateLabel}</p>
 
       {/* Live text */}
-      <div className="w-full max-w-sm px-6 mb-8 text-center min-h-[64px] flex items-center justify-center">
+      <div className="w-full max-w-sm mb-8 text-center min-h-[64px] flex items-center justify-center">
         {callState === 'listening' && transcript ? (
           <p className="text-slate-300 text-sm italic">"{transcript}"</p>
         ) : callState === 'listening' ? (
@@ -203,22 +293,9 @@ function VoiceCall({ messages, onEnd }) {
         )}
       </div>
 
-      {/* Wave bars */}
-      <div className="flex items-center gap-1.5 mb-10 h-10">
-        {[...Array(9)].map((_, i) => (
-          <div key={i}
-            className={`w-1.5 rounded-full ${
-              callState === 'listening' ? 'bg-green-400' :
-              callState === 'speaking'  ? 'bg-blue-400'  : 'bg-slate-600'
-            }`}
-            style={{
-              height: (callState === 'thinking' || callState === 'greeting') ? '6px' : `${10 + Math.abs(Math.sin(i)) * 18}px`,
-              animation: (callState === 'listening' || callState === 'speaking')
-                ? `wave ${0.5 + i * 0.08}s ease-in-out infinite alternate`
-                : 'none',
-            }}
-          />
-        ))}
+      {/* Animated wave bars */}
+      <div className="mb-10">
+        <WaveBars state={callState} />
       </div>
 
       {/* End call */}
@@ -227,33 +304,34 @@ function VoiceCall({ messages, onEnd }) {
         <span className="material-icons-outlined text-white" style={{ fontSize: 32 }}>call_end</span>
       </button>
       <p className="text-slate-500 text-xs mt-3">Terminar chamada</p>
-
-      <style>{`@keyframes wave { from{transform:scaleY(0.4)} to{transform:scaleY(1.6)} }`}</style>
     </div>
   );
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
-export default function AIAssistant({ onBack, hideHeader = false }) {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Olá chefe! 👋 Sou o assistente do ZapCRM. Podes escrever ou iniciar uma chamada de voz comigo.\n\nO que queres saber?',
-    }
-  ]);
+export default function AIAssistant({ onBack }) {
+  const [messages, setMessages] = useState(loadMessages);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [hasToken, setHasToken] = useState(true);
+  const [hasToken, setHasToken] = useState(false);
   const [inCall, setInCall] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const bottomRef = useRef(null);
-  const inputRef = useRef(null);
+  const inputRef  = useRef(null);
 
+  // Load token status
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(s => {
       setHasToken(!!s.aiToken);
     }).catch(() => {});
   }, []);
 
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    saveMessages(messages);
+  }, [messages]);
+
+  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
@@ -263,10 +341,12 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
     if (!q || loading) return;
     setInput('');
     const userMsg = { role: 'user', content: q };
-    setMessages(prev => [...prev, userMsg]);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setLoading(true);
     try {
-      const history = messages.filter(m => m.role !== 'assistant' || messages.indexOf(m) > 0);
+      // Send full history for memory continuity
+      const history = newMessages.slice(0, -1);
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -278,7 +358,7 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
     } catch (e) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `❌ Erro: ${e.message}. Verifica o teu token OpenAI nas Definições.`,
+        content: `❌ ${e.message}\n\nVerifica o teu token OpenAI nas Definições.`,
       }]);
     }
     setLoading(false);
@@ -294,49 +374,79 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
     setInCall(false);
   };
 
+  const clearMessages = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 3000);
+      return;
+    }
+    const fresh = [INITIAL_MSG];
+    setMessages(fresh);
+    saveMessages(fresh);
+    setConfirmClear(false);
+  };
+
   return (
     <div className="flex flex-col h-full bg-chat-light dark:bg-chat-dark">
-      {inCall && <VoiceCall messages={messages} onEnd={handleCallEnd} />}
+      {inCall && <VoiceCall messages={messages} hasToken={hasToken} onEnd={handleCallEnd} />}
 
       {/* Header */}
-      {!hideHeader && (
-        <div className="flex items-center gap-3 px-5 py-3.5 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-slate-200 dark:border-slate-700/50 flex-shrink-0">
-          {onBack && (
-            <button onClick={onBack} className="md:hidden p-1.5 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors flex-shrink-0">
-              <span className="material-icons-outlined text-xl">arrow_back</span>
-            </button>
-          )}
-          <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-sm">
-            <span className="material-icons-outlined text-white text-lg">support_agent</span>
-          </div>
-          <div>
-            <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>
-            <p className="text-xs text-slate-400 mt-0.5">Análise e relatórios das tuas conversas</p>
-          </div>
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              onClick={() => setInCall(true)}
-              title="Chamada de voz"
-              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-primary transition-colors"
-            >
-              <span className="material-icons-outlined text-xl">call</span>
-            </button>
-            <button
-              onClick={() => setMessages([{ role: 'assistant', content: 'Olá chefe! 👋 O que queres saber?' }])}
-              title="Limpar conversa"
-              className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 transition-colors"
-            >
-              <span className="material-icons-outlined text-xl">refresh</span>
-            </button>
-          </div>
+      <div className="flex items-center gap-3 px-4 py-3.5 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-slate-200 dark:border-slate-700/50 flex-shrink-0">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="md:hidden p-1.5 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors flex-shrink-0"
+          >
+            <span className="material-icons-outlined text-xl">arrow_back</span>
+          </button>
+        )}
+        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shadow-sm flex-shrink-0">
+          <span className="material-icons-outlined text-white text-lg">support_agent</span>
         </div>
-      )}
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm text-slate-800 dark:text-slate-100 leading-none">Assistente</p>
+          <p className="text-xs text-slate-400 mt-0.5 truncate">Análise e relatórios das tuas conversas</p>
+        </div>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button
+            onClick={() => setInCall(true)}
+            title="Chamada de voz"
+            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-primary transition-colors"
+          >
+            <span className="material-icons-outlined text-xl">call</span>
+          </button>
+          <button
+            onClick={clearMessages}
+            title={confirmClear ? 'Confirmar limpeza' : 'Limpar conversa'}
+            className={`p-2 rounded-full transition-colors ${
+              confirmClear
+                ? 'text-red-500 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40'
+                : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-400'
+            }`}
+          >
+            <span className="material-icons-outlined text-xl">
+              {confirmClear ? 'warning' : 'refresh'}
+            </span>
+          </button>
+        </div>
+      </div>
 
+      {/* Token warning */}
       {!hasToken && (
         <div className="mx-4 mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-start gap-2">
           <span className="material-icons-outlined text-amber-500 text-lg flex-shrink-0">warning</span>
           <p className="text-xs text-amber-700 dark:text-amber-400">
             Adiciona o teu <strong>Token OpenAI</strong> nas Definições → IA para usar o assistente.
+          </p>
+        </div>
+      )}
+
+      {/* Confirm clear banner */}
+      {confirmClear && (
+        <div className="mx-4 mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl flex items-center gap-2">
+          <span className="material-icons-outlined text-red-500 text-lg flex-shrink-0">delete_forever</span>
+          <p className="text-xs text-red-600 dark:text-red-400 flex-1">
+            Clica novamente em <strong>limpar</strong> para apagar o histórico.
           </p>
         </div>
       )}
@@ -373,13 +483,12 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="flex items-end gap-2 px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-slate-200/50 dark:border-slate-700/30 flex-shrink-0">
-        {/* Call button (mobile — also accessible here) */}
+      {/* Input area */}
+      <div className="flex items-end gap-2 px-3 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-t border-slate-200/50 dark:border-slate-700/30 flex-shrink-0">
         <button
           onClick={() => setInCall(true)}
           title="Chamada de voz"
-          className="w-11 h-11 rounded-full bg-primary hover:bg-primary-dark flex items-center justify-center flex-shrink-0 shadow-sm transition-all"
+          className="w-11 h-11 rounded-full bg-primary hover:bg-primary-dark flex items-center justify-center flex-shrink-0 shadow-sm transition-all active:scale-95"
         >
           <span className="material-icons-outlined text-white text-xl">call</span>
         </button>
@@ -387,7 +496,11 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={e => { setInput(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+            onChange={e => {
+              setInput(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }}
             onKeyDown={onKey}
             placeholder="Escreve ou usa a chamada de voz…"
             rows={1}
@@ -398,7 +511,7 @@ export default function AIAssistant({ onBack, hideHeader = false }) {
         <button
           onClick={() => send()}
           disabled={!input.trim() || loading}
-          className="w-11 h-11 rounded-full bg-primary hover:bg-primary-dark disabled:opacity-50 flex items-center justify-center flex-shrink-0 transition-all shadow-sm"
+          className="w-11 h-11 rounded-full bg-primary hover:bg-primary-dark disabled:opacity-50 flex items-center justify-center flex-shrink-0 transition-all shadow-sm active:scale-95"
         >
           <span className="material-icons-outlined text-white text-xl">send</span>
         </button>
