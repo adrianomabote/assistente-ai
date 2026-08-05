@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 
 function formatTime(ts) {
   if (!ts) return '';
@@ -58,6 +58,23 @@ export default function ConversationList({
   };
 
   const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+
+  // Long-press to enter select mode on mobile
+  const longPressTimer = useRef(null);
+  const longPressTarget = useRef(null);
+
+  const onPressStart = useCallback((jid) => {
+    longPressTarget.current = jid;
+    longPressTimer.current = setTimeout(() => {
+      setSelectMode(true);
+      setSelected(new Set([jid]));
+    }, 500);
+  }, []);
+
+  const onPressEnd = useCallback(() => {
+    clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+  }, []);
 
   const handleDelete = () => {
     if (selected.size === 0) return;
@@ -186,7 +203,11 @@ export default function ConversationList({
             <div
               key={conv.jid}
               onClick={() => selectMode ? toggleSelect(conv.jid) : onSelect(conv.jid)}
-              className={`w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100/80 dark:border-slate-700/30 transition-colors cursor-pointer ${
+              onTouchStart={() => !selectMode && onPressStart(conv.jid)}
+              onTouchEnd={onPressEnd}
+              onTouchMove={onPressEnd}
+              onContextMenu={(e) => { if (!selectMode) { e.preventDefault(); setSelectMode(true); setSelected(new Set([conv.jid])); } }}
+              className={`w-full flex items-center gap-3 px-4 py-3 border-b border-slate-100/80 dark:border-slate-700/30 transition-colors cursor-pointer select-none ${
                 isSelected ? 'bg-primary/10 dark:bg-primary/20' :
                 active ? 'bg-[#f0f2f5] dark:bg-[#2a3942]' :
                 'hover:bg-[#f5f6f6] dark:hover:bg-[#202c33]'
