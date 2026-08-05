@@ -33,7 +33,7 @@ export default function Settings({ status, onDisconnect, onConnect }) {
   };
 
   const tabs = [
-    { id: 'ia',         label: 'IA',       icon: 'auto_awesome' },
+    { id: 'ia',         label: 'IA',       icon: 'smart_toy' },
     { id: 'connection', label: 'Conexão',  icon: 'wifi' },
   ];
 
