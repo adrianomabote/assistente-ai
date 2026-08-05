@@ -15,6 +15,7 @@ export default function App() {
   const [activeJid, setActiveJid] = useState(null);
   const [page, setPage] = useState('chats');
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all'); // 'all' | 'unread' | 'groups'
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -62,9 +63,13 @@ export default function App() {
     setConversations(prev => prev.map(c => c.jid === jid ? { ...c, unread: 0 } : c));
   }, []);
 
-  const filtered = conversations.filter(c =>
-    (c.name || c.phone || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = conversations.filter(c => {
+    const matchesSearch = (c.name || c.phone || '').toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+    if (filter === 'unread') return c.unread > 0;
+    if (filter === 'groups') return c.isGroup;
+    return true;
+  });
   const activeConv = conversations.find(c => c.jid === activeJid);
 
   return (
@@ -82,10 +87,13 @@ export default function App() {
         {page === 'chats' && (
           <ConversationList
             conversations={filtered}
+            allConversations={conversations}
             activeJid={activeJid}
             onSelect={selectConv}
             search={search}
             setSearch={setSearch}
+            filter={filter}
+            setFilter={setFilter}
           />
         )}
         {page === 'settings' && (

@@ -19,11 +19,23 @@ function Avatar({ name }) {
   );
 }
 
-export default function ConversationList({ conversations, activeJid, onSelect, search, setSearch }) {
+const FILTERS = [
+  { id: 'all',     label: 'Todas' },
+  { id: 'unread',  label: 'Não lidas' },
+  { id: 'groups',  label: 'Grupos' },
+];
+
+export default function ConversationList({ conversations, allConversations = [], activeJid, onSelect, search, setSearch, filter, setFilter }) {
+  // Counts for badge display (always computed from full list, ignoring search)
+  const unreadCount = allConversations.filter(c => c.unread > 0).length;
+  const groupCount  = allConversations.filter(c => c.isGroup).length;
+
+  const counts = { all: null, unread: unreadCount || null, groups: groupCount || null };
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
       {/* Search bar */}
-      <div className="px-3 py-2 bg-white dark:bg-[#111b21]">
+      <div className="px-3 pt-2 pb-1 bg-white dark:bg-[#111b21]">
         <div className="flex items-center gap-2 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-2">
           <span className="material-icons-outlined text-slate-400 text-lg">search</span>
           <input
@@ -38,6 +50,34 @@ export default function ConversationList({ conversations, activeJid, onSelect, s
             </button>
           )}
         </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="flex gap-2 px-3 py-2 bg-white dark:bg-[#111b21] border-b border-slate-100 dark:border-slate-700/40">
+        {FILTERS.map(f => {
+          const active = filter === f.id;
+          const count = counts[f.id];
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                active
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-[#f0f2f5] dark:bg-[#202c33] text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#2a3942]'
+              }`}
+            >
+              {f.label}
+              {count != null && (
+                <span className={`text-[10px] font-semibold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
+                  active ? 'bg-white/30 text-white' : 'bg-primary text-white'
+                }`}>
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* List */}
