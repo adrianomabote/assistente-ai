@@ -3,12 +3,11 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import {
-  makeWASocket, DisconnectReason, useMultiFileAuthState,
-  fetchLatestBaileysVersion, makeCacheableSignalKeyStore
-} from '@whiskeysockets/baileys';
-import pino from 'pino';
+import { execSync } from 'child_process';
+import pkg from 'whatsapp-web.js';
 import QRCode from 'qrcode';
+
+const { Client, LocalAuth, MessageMedia } = pkg;
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,7 +18,6 @@ app.use(express.json({ limit: '10mb' }));
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 if (!existsSync('./data')) mkdirSync('./data', { recursive: true });
-if (!existsSync('./auth')) mkdirSync('./auth', { recursive: true });
 
 const DATA_FILE = './data/data.json';
 
@@ -42,154 +40,179 @@ const saveData = (d) => {
 };
 
 let appData = loadData();
-let sock = null;
+let client = null;
 let connectionStatus = 'disconnected';
 let lastQR = null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const getPhone = (jid = '') => jid.replace('@s.whatsapp.net', '').replace('@g.us', '');
+const getPhone = (id = '') => id.replace('@c.us', '').replace('@g.us', '');
 
-const extractText = (msg = {}) =>
-  msg.conversation ||
-  msg.extendedTextMessage?.text ||
-  msg.imageMessage?.caption ||
-  msg.videoMessage?.caption ||
-  (msg.audioMessage ? '[Áudio 🎵]' : '') ||
-  (msg.documentMessage ? `[Documento 📄] ${msg.documentMessage.fileName || ''}`.trim() : '') ||
-  (msg.stickerMessage ? '[Sticker]' : '') ||
-  (msg.locationMessage ? '[Localização 📍]' : '') ||
-  '[Mensagem]';
-
-const upsertConv = (jid, patch = {}) => {
-  if (!appData.conversations[jid]) {
-    appData.conversations[jid] = {
-      jid, phone: getPhone(jid), name: getPhone(jid),
-      isGroup: jid.endsWith('@g.us'),
-      messages: [], unread: 0, lastMessage: '', lastTimestamp: 0,
+const upsertConv = (id, patch = {}) => {
+  if (!appData.conversations[id]) {
+    appData.conversations[id] = {
+      jid: id,
+      phone: getPhone(id),
+      name: getPhone(id),
+      isGroup: id.endsWith('@g.us'),
+      messages: [],
+      unread: 0,
+      lastMessage: '',
+      lastTimestamp: 0,
     };
   }
-  Object.assign(appData.conversations[jid], patch);
-  return appData.conversations[jid];
+  Object.assign(appData.conversations[id], patch);
+  return appData.conversations[id];
+};
+
+const extractText = (msg) => {
+  if (msg.type === 'chat') return msg.body || '';
+  if (msg.type === 'image') return msg.body ? `[Imagem 🖼] ${msg.body}` : '[Imagem 🖼]';
+  if (msg.type === 'video') return '[Vídeo 🎥]';
+  if (msg.type === 'audio' || msg.type === 'ptt') return '[Áudio 🎵]';
+  if (msg.type === 'document') return '[Documento 📄]';
+  if (msg.type === 'sticker') return '[Sticker]';
+  if (msg.type === 'location') return '[Localização 📍]';
+  return msg.body || '[Mensagem]';
 };
 
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 async function connectWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState('./auth');
-  const { version } = await fetchLatestBaileysVersion();
-  const logger = pino({ level: 'silent' });
-
-  sock = makeWASocket({
-    version,
-    auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
-    logger,
-    printQRInTerminal: false,
-    browser: ['WhatsApp CRM', 'Chrome', '10.0'],
-    syncFullHistory: false,
-    generateHighQualityLinkPreview: false,
+  client = new Client({
+    authStrategy: new LocalAuth({ dataPath: './auth' }),
+    puppeteer: {
+      headless: true,
+      executablePath: (() => { try { return execSync('which chromium').toString().trim(); } catch { return undefined; } })(),
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-gpu',
+      ],
+    },
   });
 
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr) {
-      try {
-        const dataUrl = await QRCode.toDataURL(qr, { width: 280, margin: 2 });
-        lastQR = dataUrl;
-        connectionStatus = 'qr';
-        io.emit('status', 'qr');
-        io.emit('qr', dataUrl);
-      } catch {}
-    }
-
-    if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      const loggedOut = code === DisconnectReason.loggedOut;
-      connectionStatus = 'disconnected';
-      io.emit('status', 'disconnected');
-      io.emit('qr', null);
-      if (!loggedOut) {
-        console.log('Reconnecting in 3s...');
-        setTimeout(connectWhatsApp, 3000);
-      }
-    }
-
-    if (connection === 'open') {
-      lastQR = null;
-      connectionStatus = 'connected';
-      io.emit('status', 'connected');
-      io.emit('qr', null);
-      console.log('WhatsApp connected!');
-    }
+  client.on('qr', async (qr) => {
+    try {
+      const dataUrl = await QRCode.toDataURL(qr, { width: 280, margin: 2 });
+      lastQR = dataUrl;
+      connectionStatus = 'qr';
+      io.emit('status', 'qr');
+      io.emit('qr', dataUrl);
+    } catch {}
   });
 
-  sock.ev.on('creds.update', saveCreds);
+  client.on('ready', () => {
+    lastQR = null;
+    connectionStatus = 'connected';
+    io.emit('status', 'connected');
+    io.emit('qr', null);
+    console.log('WhatsApp connected!');
+  });
 
-  sock.ev.on('messages.upsert', async ({ messages }) => {
-    for (const msg of messages) {
-      if (!msg.message || msg.key.remoteJid === 'status@broadcast') continue;
+  client.on('authenticated', () => {
+    console.log('WhatsApp authenticated!');
+  });
 
-      const jid = msg.key.remoteJid;
-      const fromMe = !!msg.key.fromMe;
-      const msgId = msg.key.id;
-      const timestamp = Number(msg.messageTimestamp) || Math.floor(Date.now() / 1000);
-      const text = extractText(msg.message);
-      const pushName = msg.pushName;
+  client.on('auth_failure', (msg) => {
+    console.error('Auth failure:', msg);
+    connectionStatus = 'disconnected';
+    io.emit('status', 'disconnected');
+  });
 
-      const conv = upsertConv(jid);
-      if (pushName && !conv.isGroup && pushName !== getPhone(jid)) conv.name = pushName;
-      if (conv.messages.find(m => m.id === msgId)) continue;
+  client.on('disconnected', (reason) => {
+    console.log('WhatsApp disconnected:', reason);
+    connectionStatus = 'disconnected';
+    io.emit('status', 'disconnected');
+    io.emit('qr', null);
+    // Reconnect after a delay
+    setTimeout(connectWhatsApp, 5000);
+  });
 
-      const message = { id: msgId, text, fromMe, timestamp, status: 'received' };
-      conv.messages.push(message);
-      conv.lastMessage = text;
-      conv.lastTimestamp = timestamp;
-      if (!fromMe) conv.unread = (conv.unread || 0) + 1;
+  client.on('message', async (msg) => {
+    if (msg.from === 'status@broadcast') return;
 
-      saveData(appData);
-      io.emit('message', { jid, message });
-      io.emit('conversation_update', { ...conv });
+    const id = msg.from;
+    const text = extractText(msg);
+    const timestamp = Math.floor(msg.timestamp);
+    const msgId = msg.id._serialized;
 
-      // Auto-reply
-      if (!fromMe && appData.settings.botEnabled && !conv.isGroup) {
-        // Check keyword rules first
-        let reply = appData.settings.botMessage || 'Olá!';
-        if (appData.settings.keywordsEnabled && Array.isArray(appData.settings.keywords)) {
-          const lowerText = text.toLowerCase();
-          for (const rule of appData.settings.keywords) {
-            const kws = (rule.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-            if (kws.some(kw => lowerText.includes(kw))) {
-              reply = rule.reply;
-              break;
-            }
+    const conv = upsertConv(id);
+    // Try to get contact name
+    try {
+      const contact = await msg.getContact();
+      if (contact.pushname && contact.pushname !== getPhone(id)) conv.name = contact.pushname;
+      else if (contact.name) conv.name = contact.name;
+    } catch {}
+
+    if (conv.messages.find(m => m.id === msgId)) return;
+
+    const message = { id: msgId, text, fromMe: false, timestamp, status: 'received' };
+    conv.messages.push(message);
+    conv.lastMessage = text;
+    conv.lastTimestamp = timestamp;
+    conv.unread = (conv.unread || 0) + 1;
+
+    saveData(appData);
+    io.emit('message', { jid: id, message });
+    io.emit('conversation_update', { ...conv });
+
+    // Auto-reply
+    if (appData.settings.botEnabled && !conv.isGroup) {
+      let reply = appData.settings.botMessage || 'Olá!';
+      if (appData.settings.keywordsEnabled && Array.isArray(appData.settings.keywords)) {
+        const lowerText = text.toLowerCase();
+        for (const rule of appData.settings.keywords) {
+          const kws = (rule.keywords || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+          if (kws.some(kw => lowerText.includes(kw))) {
+            reply = rule.reply;
+            break;
           }
         }
-        setTimeout(async () => {
-          try {
-            await sock.sendMessage(jid, { text: reply });
-            const autoId = `auto_${Date.now()}`;
-            const autoMsg = { id: autoId, text: reply, fromMe: true, timestamp: Math.floor(Date.now() / 1000), status: 'sent' };
-            conv.messages.push(autoMsg);
-            conv.lastMessage = reply;
-            conv.lastTimestamp = autoMsg.timestamp;
-            saveData(appData);
-            io.emit('message', { jid, message: autoMsg });
-            io.emit('conversation_update', { ...conv });
-          } catch (e) { console.error('Auto-reply error:', e.message); }
-        }, 1200);
       }
+      setTimeout(async () => {
+        try {
+          await client.sendMessage(id, reply);
+          const autoId = `auto_${Date.now()}`;
+          const autoMsg = { id: autoId, text: reply, fromMe: true, timestamp: Math.floor(Date.now() / 1000), status: 'sent' };
+          conv.messages.push(autoMsg);
+          conv.lastMessage = reply;
+          conv.lastTimestamp = autoMsg.timestamp;
+          saveData(appData);
+          io.emit('message', { jid: id, message: autoMsg });
+          io.emit('conversation_update', { ...conv });
+        } catch (e) { console.error('Auto-reply error:', e.message); }
+      }, 1200);
     }
   });
 
-  sock.ev.on('messages.update', (updates) => {
-    for (const { key, update } of updates) {
-      const conv = appData.conversations[key.remoteJid];
-      if (!conv) continue;
-      const msg = conv.messages.find(m => m.id === key.id);
-      if (msg && update.status) {
-        msg.status = update.status;
-        io.emit('message_status', { jid: key.remoteJid, id: key.id, status: update.status });
-      }
-    }
+  client.on('message_create', async (msg) => {
+    // Track outbound messages sent from other devices
+    if (!msg.fromMe) return;
+    if (msg.from === 'status@broadcast') return;
+
+    const id = msg.to;
+    const text = extractText(msg);
+    const timestamp = Math.floor(msg.timestamp);
+    const msgId = msg.id._serialized;
+
+    const conv = upsertConv(id);
+    if (conv.messages.find(m => m.id === msgId)) return;
+
+    const message = { id: msgId, text, fromMe: true, timestamp, status: 'sent' };
+    conv.messages.push(message);
+    conv.lastMessage = text;
+    conv.lastTimestamp = timestamp;
+
     saveData(appData);
+    io.emit('message', { jid: id, message });
+    io.emit('conversation_update', { ...conv });
   });
+
+  await client.initialize();
 }
 
 // ─── REST API ─────────────────────────────────────────────────────────────────
@@ -212,9 +235,9 @@ app.post('/api/conversations/:jid/read', (req, res) => {
 
 app.post('/api/send', async (req, res) => {
   const { jid, text } = req.body;
-  if (!sock || connectionStatus !== 'connected') return res.status(400).json({ error: 'WhatsApp não conectado' });
+  if (!client || connectionStatus !== 'connected') return res.status(400).json({ error: 'WhatsApp não conectado' });
   try {
-    await sock.sendMessage(jid, { text });
+    await client.sendMessage(jid, text);
     const msgId = `manual_${Date.now()}`;
     const message = { id: msgId, text, fromMe: true, timestamp: Math.floor(Date.now() / 1000), status: 'sent' };
     const conv = upsertConv(jid);
@@ -240,7 +263,7 @@ app.post('/api/settings', (req, res) => {
 });
 
 app.post('/api/disconnect', async (_, res) => {
-  try { if (sock) await sock.logout(); } catch {}
+  try { if (client) await client.destroy(); } catch {}
   connectionStatus = 'disconnected';
   io.emit('status', 'disconnected');
   res.json({ ok: true });
