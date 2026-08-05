@@ -10,7 +10,7 @@ import AIAssistant from './components/AIAssistant';
 
 export default function App() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem('zapcrm_auth') === '1');
-  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
+  const [dark, setDark] = useState(() => localStorage.getItem('theme') !== 'light');
   const [status, setStatus] = useState('disconnected');
   const [qr, setQr] = useState(null);
   const [showQR, setShowQR] = useState(false);
