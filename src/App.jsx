@@ -6,6 +6,7 @@ import ChatWindow from './components/ChatWindow';
 import Settings from './components/Settings';
 import QRModal from './components/QRModal';
 import LoginScreen from './components/LoginScreen';
+import AIAssistant from './components/AIAssistant';
 
 export default function App() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem('zapcrm_auth') === '1');
@@ -15,9 +16,9 @@ export default function App() {
   const [showQR, setShowQR] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [activeJid, setActiveJid] = useState(null);
-  const [page, setPage] = useState('chats');
+  const [page, setPage] = useState('chats'); // 'chats' | 'settings' | 'ai'
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('all'); // 'all' | 'unread' | 'groups' | 'archived'
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -46,48 +47,35 @@ export default function App() {
     return () => { socket.off('status'); socket.off('qr'); socket.off('conversation_update'); };
   }, [authed]);
 
-  // Keyboard navigation: Escape goes back; browser back button support
+  // Keyboard + browser back navigation
   useEffect(() => {
     if (!authed) return;
-
     const onKey = (e) => {
       if (e.key === 'Escape') {
         if (showQR) { setShowQR(false); return; }
-        if (page === 'settings') { setPage('chats'); return; }
+        if (page !== 'chats') { setPage('chats'); return; }
         if (activeJid) { setActiveJid(null); return; }
       }
     };
-
     const onPop = () => {
-      if (showQR) { setShowQR(false); return; }
-      if (page === 'settings') { setPage('chats'); history.pushState(null, ''); return; }
+      if (showQR) { setShowQR(false); history.pushState(null, ''); return; }
+      if (page !== 'chats') { setPage('chats'); history.pushState(null, ''); return; }
       if (activeJid) { setActiveJid(null); history.pushState(null, ''); return; }
     };
-
     window.addEventListener('keydown', onKey);
     window.addEventListener('popstate', onPop);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('popstate', onPop);
-    };
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('popstate', onPop); };
   }, [authed, showQR, page, activeJid]);
 
-  // Push a history entry whenever navigating so browser back has something to pop
   useEffect(() => {
     if (!authed) return;
     history.pushState(null, '');
   }, [page, activeJid, authed]);
 
-  const handleConnect = useCallback(() => {
-    setShowQR(true);
-    setQr(null);
-  }, []);
-
+  const handleConnect = useCallback(() => { setShowQR(true); setQr(null); }, []);
   const handleDisconnect = useCallback(() => {
     fetch('/api/disconnect', { method: 'POST' });
-    setStatus('disconnected');
-    setShowQR(false);
-    setQr(null);
+    setStatus('disconnected'); setShowQR(false); setQr(null);
   }, []);
 
   const selectConv = useCallback((jid) => {
@@ -97,23 +85,57 @@ export default function App() {
     setConversations(prev => prev.map(c => c.jid === jid ? { ...c, unread: 0 } : c));
   }, []);
 
-  const goToChats = useCallback(() => {
-    setPage('chats');
-    setActiveJid(null);
+  const goToChats = useCallback(() => { setPage('chats'); setActiveJid(null); }, []);
+
+  // ── Conversation bulk actions ──────────────────────────────────────────────
+  const handleDeleteConvs = useCallback(async (jids) => {
+    await fetch('/api/conversations/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jids }),
+    });
+    setConversations(prev => prev.filter(c => !jids.includes(c.jid)));
+    if (jids.includes(activeJid)) setActiveJid(null);
+  }, [activeJid]);
+
+  const handleArchiveConvs = useCallback(async (jids, archive) => {
+    await fetch('/api/conversations/bulk-archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jids, archived: archive }),
+    });
+    setConversations(prev => prev.map(c => jids.includes(c.jid) ? { ...c, archived: archive } : c));
+    if (archive && jids.includes(activeJid)) setActiveJid(null);
+  }, [activeJid]);
+
+  const handleMarkReadConvs = useCallback(async (jids) => {
+    await fetch('/api/conversations/bulk-read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jids }),
+    });
+    setConversations(prev => prev.map(c => jids.includes(c.jid) ? { ...c, unread: 0 } : c));
   }, []);
 
+  const handleMarkAllRead = useCallback(async () => {
+    await fetch('/api/conversations/read-all', { method: 'POST' });
+    setConversations(prev => prev.map(c => ({ ...c, unread: 0 })));
+  }, []);
+
+  // ── Filtering ──────────────────────────────────────────────────────────────
   const filtered = conversations.filter(c => {
     const matchesSearch = (c.name || c.phone || '').toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
+    if (filter === 'archived') return !!c.archived;
+    if (c.archived) return false; // hide archived in other views
     if (filter === 'unread') return c.unread > 0;
     if (filter === 'groups') return c.isGroup;
     return true;
   });
+
   const activeConv = conversations.find(c => c.jid === activeJid);
 
-  if (!authed) {
-    return <LoginScreen onAuth={() => setAuthed(true)} />;
-  }
+  if (!authed) return <LoginScreen onAuth={() => setAuthed(true)} />;
 
   return (
     <div className="h-screen w-screen flex bg-bg-light dark:bg-bg-dark overflow-hidden">
@@ -137,20 +159,31 @@ export default function App() {
             setSearch={setSearch}
             filter={filter}
             setFilter={setFilter}
+            onDeleteConvs={handleDeleteConvs}
+            onArchiveConvs={handleArchiveConvs}
+            onMarkReadConvs={handleMarkReadConvs}
+            onMarkAllRead={handleMarkAllRead}
           />
         )}
         {page === 'settings' && (
-          <Settings
-            status={status}
-            onDisconnect={handleDisconnect}
-            onConnect={handleConnect}
-          />
+          <Settings status={status} onDisconnect={handleDisconnect} onConnect={handleConnect} />
+        )}
+        {page === 'ai' && (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 gap-3 text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="material-icons-outlined text-primary text-3xl">auto_awesome</span>
+            </div>
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Assistente IA aberto</p>
+            <p className="text-xs text-slate-400">O chat com a IA está no painel principal →</p>
+          </div>
         )}
       </div>
 
       {/* Right panel */}
       <div className="flex-1 flex flex-col h-full bg-chat-light dark:bg-chat-dark">
-        {activeConv ? (
+        {page === 'ai' ? (
+          <AIAssistant />
+        ) : activeConv ? (
           <ChatWindow conv={activeConv} status={status} onBack={() => setActiveJid(null)} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center select-none gap-4">
@@ -169,10 +202,7 @@ export default function App() {
         )}
       </div>
 
-      {/* QR Modal */}
-      {showQR && (
-        <QRModal qr={qr} status={status} onClose={() => setShowQR(false)} />
-      )}
+      {showQR && <QRModal qr={qr} status={status} onClose={() => setShowQR(false)} />}
     </div>
   );
 }

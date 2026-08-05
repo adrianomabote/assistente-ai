@@ -293,6 +293,129 @@ app.post('/api/settings', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Bulk conversation actions ─────────────────────────────────────────────────
+app.post('/api/conversations/bulk-delete', (req, res) => {
+  const { jids = [] } = req.body;
+  for (const jid of jids) delete appData.conversations[jid];
+  saveData(appData);
+  res.json({ ok: true });
+});
+
+app.post('/api/conversations/bulk-archive', (req, res) => {
+  const { jids = [], archived = true } = req.body;
+  for (const jid of jids) {
+    if (appData.conversations[jid]) appData.conversations[jid].archived = archived;
+  }
+  saveData(appData);
+  res.json({ ok: true });
+});
+
+app.post('/api/conversations/bulk-read', (req, res) => {
+  const { jids = [] } = req.body;
+  for (const jid of jids) {
+    if (appData.conversations[jid]) appData.conversations[jid].unread = 0;
+  }
+  saveData(appData);
+  res.json({ ok: true });
+});
+
+app.post('/api/conversations/read-all', (_, res) => {
+  for (const jid of Object.keys(appData.conversations)) {
+    appData.conversations[jid].unread = 0;
+  }
+  saveData(appData);
+  res.json({ ok: true });
+});
+
+// ── AI Assistant chat ─────────────────────────────────────────────────────────
+app.post('/api/ai/chat', async (req, res) => {
+  const { message } = req.body;
+  const { aiToken, aiModel } = appData.settings;
+
+  if (!aiToken) return res.status(400).json({ error: 'Token OpenAI não configurado nas Definições.' });
+  if (!message?.trim()) return res.status(400).json({ error: 'Mensagem vazia.' });
+
+  try {
+    // Build CRM context snapshot for the AI
+    const convs = Object.values(appData.conversations);
+    const totalConvs = convs.length;
+    const unreadConvs = convs.filter(c => c.unread > 0);
+    const archivedConvs = convs.filter(c => c.archived);
+    const groupConvs = convs.filter(c => c.isGroup);
+    const now = Math.floor(Date.now() / 1000);
+    const todayStart = now - (now % 86400);
+
+    // Recent messages (last 3 msgs from each of the 10 most active convs)
+    const topConvs = [...convs]
+      .filter(c => !c.archived)
+      .sort((a, b) => (b.lastTimestamp || 0) - (a.lastTimestamp || 0))
+      .slice(0, 10);
+
+    const recentSummary = topConvs.map(c => {
+      const recentMsgs = (c.messages || []).slice(-3).map(m =>
+        `    [${m.fromMe ? 'Eu' : c.name || c.phone}]: ${m.text}`
+      ).join('\n');
+      return `• ${c.name || c.phone} (${c.unread} não lidas, última: ${new Date((c.lastTimestamp || 0) * 1000).toLocaleString('pt-PT')}):\n${recentMsgs}`;
+    }).join('\n\n');
+
+    // Today's messages
+    const todayMsgs = convs.flatMap(c =>
+      (c.messages || [])
+        .filter(m => m.timestamp >= todayStart)
+        .map(m => ({ conv: c.name || c.phone, fromMe: m.fromMe, text: m.text, ts: m.timestamp }))
+    ).sort((a, b) => b.ts - a.ts).slice(0, 30);
+
+    const todaySummary = todayMsgs.length
+      ? todayMsgs.map(m => `  [${m.fromMe ? 'Eu' : m.conv}]: ${m.text}`).join('\n')
+      : '  Nenhuma mensagem hoje.';
+
+    const systemPrompt = `És o assistente inteligente do ZapCRM — um CRM de WhatsApp. 
+Tens acesso ao resumo completo das conversas do utilizador e deves ajudá-lo a analisar, resumir, identificar padrões e responder perguntas sobre os seus clientes e interações.
+Responde sempre em português (de Portugal). Sê direto, útil e profissional.
+
+=== DADOS ACTUAIS DO CRM ===
+Data/hora actual: ${new Date().toLocaleString('pt-PT')}
+
+Resumo geral:
+- Total de conversas: ${totalConvs}
+- Conversas com mensagens não lidas: ${unreadConvs.length} (${unreadConvs.map(c => c.name || c.phone).join(', ') || 'nenhuma'})
+- Conversas arquivadas: ${archivedConvs.length}
+- Grupos: ${groupConvs.length}
+- Conversas individuais: ${convs.filter(c => !c.isGroup && !c.archived).length}
+
+Mensagens de hoje:
+${todaySummary}
+
+Conversas mais recentes e últimas mensagens:
+${recentSummary || 'Nenhuma conversa ainda.'}
+===========================
+
+Responde à pergunta do utilizador com base nestes dados.`;
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: aiModel || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message },
+        ],
+        max_tokens: 800,
+        temperature: 0.6,
+      },
+      {
+        headers: { Authorization: `Bearer ${aiToken}`, 'Content-Type': 'application/json' },
+        timeout: 30000,
+      }
+    );
+
+    res.json({ reply: response.data.choices[0].message.content.trim() });
+  } catch (e) {
+    const errMsg = e.response?.data?.error?.message || e.message;
+    res.status(500).json({ error: errMsg });
+  }
+});
+
 app.post('/api/disconnect', async (_, res) => {
   try { if (client) await client.destroy(); } catch {}
   connectionStatus = 'disconnected';

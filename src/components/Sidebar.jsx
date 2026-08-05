@@ -8,6 +8,21 @@ export default function Sidebar({ status, dark, setDark, page, setPage, onLogoCl
   const dot = status === 'connected' ? 'bg-green-400' : status === 'qr' ? 'bg-yellow-400 animate-pulse' : 'bg-slate-400';
   const label = status === 'connected' ? 'Conectado' : status === 'qr' ? 'Aguardando QR' : 'Desconectado';
 
+  const navBtn = (id, icon, title) => (
+    <button
+      key={id}
+      onClick={() => setPage(page === id ? 'chats' : id)}
+      title={title}
+      className={`p-2 rounded-full transition-colors ${
+        page === id
+          ? 'bg-primary/15 text-primary dark:bg-primary/25'
+          : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400'
+      }`}
+    >
+      <span className="material-icons-outlined text-xl">{icon}</span>
+    </button>
+  );
+
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-slate-200/80 dark:border-slate-700/50 flex-shrink-0">
       {/* Logo — click to go back to chats */}
@@ -28,14 +43,9 @@ export default function Sidebar({ status, dark, setDark, page, setPage, onLogoCl
         </div>
       </button>
 
-      <div className="flex items-center">
-        <button
-          onClick={() => setPage(page === 'settings' ? 'chats' : 'settings')}
-          title={page === 'settings' ? 'Conversas' : 'Definições'}
-          className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 transition-colors"
-        >
-          <span className="material-icons-outlined text-xl">{page === 'settings' ? 'forum' : 'settings'}</span>
-        </button>
+      <div className="flex items-center gap-0.5">
+        {navBtn('ai', 'auto_awesome', 'Assistente IA')}
+        {navBtn('settings', 'settings', 'Definições')}
         <button
           onClick={() => setDark(!dark)}
           title="Alternar tema"
