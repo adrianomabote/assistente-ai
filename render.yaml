@@ -7,7 +7,7 @@ services:
 
     buildCommand: |
       apt-get install -y chromium-browser 2>/dev/null || true
-      npm install
+      npm install --include=dev
       npm run build
 
     startCommand: npm start
