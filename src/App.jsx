@@ -142,7 +142,7 @@ export default function App() {
   if (!authed) return <LoginScreen onAuth={() => setAuthed(true)} />;
 
   return (
-    <div className="h-screen w-screen flex bg-bg-light dark:bg-bg-dark overflow-hidden">
+    <div className="w-screen flex bg-bg-light dark:bg-bg-dark overflow-hidden" style={{ height: '100dvh' }}>
 
       {/* ── LEFT PANEL ──────────────────────────────────────────────────────────
           Desktop: fixed 360px width, always visible
