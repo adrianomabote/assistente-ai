@@ -51,38 +51,27 @@ const SUGGESTIONS = [
 ];
 
 // ── Wave bars component ──────────────────────────────────────────────────────
-// Heights per bar so they look like a natural waveform
 const BAR_HEIGHTS = [14, 26, 38, 22, 44, 18, 34, 28, 16];
 
-function WaveBars({ state }) {
-  const isActive = state === 'listening' || state === 'speaking';
-  const color =
-    state === 'listening' ? 'bg-green-400' :
-    state === 'speaking'  ? 'bg-blue-400'  : 'bg-slate-600';
-
+// active=true only when user is actually speaking or AI is speaking
+function WaveBars({ active, color = 'bg-slate-600' }) {
   return (
     <div className="flex items-center gap-1.5 h-12">
       {BAR_HEIGHTS.map((h, i) => (
         <div
           key={i}
-          className={`w-1.5 rounded-full transition-colors duration-300 ${color}`}
+          className={`w-1.5 rounded-full ${color}`}
           style={{
-            height: isActive ? `${h}px` : '6px',
-            animation: isActive
+            height: active ? `${h}px` : '6px',
+            animation: active
               ? `wave ${0.45 + i * 0.07}s ease-in-out infinite alternate`
               : 'none',
             animationDelay: `${i * 0.06}s`,
-            transition: 'height 0.2s ease',
+            transition: 'height 0.25s ease, background-color 0.3s',
           }}
         />
       ))}
-      <style>{`
-        @keyframes wave {
-          0%   { transform: scaleY(0.3); }
-          50%  { transform: scaleY(1.0); }
-          100% { transform: scaleY(1.7); }
-        }
-      `}</style>
+      <style>{`@keyframes wave{0%{transform:scaleY(0.3)}50%{transform:scaleY(1.0)}100%{transform:scaleY(1.7)}}`}</style>
     </div>
   );
 }
@@ -92,12 +81,15 @@ function VoiceCall({ messages, hasToken, onEnd }) {
   const [callState, setCallState] = useState('greeting');
   const [transcript, setTranscript] = useState('');
   const [agentText, setAgentText] = useState('A iniciar chamada…');
+  // true only when interim speech results are arriving (user actually speaking)
+  const [voiceDetected, setVoiceDetected] = useState(false);
 
-  const callStateRef  = useRef('greeting');
-  const callMsgsRef   = useRef([...messages]);
-  const activeRef     = useRef(true);
+  const callStateRef   = useRef('greeting');
+  const callMsgsRef    = useRef([...messages]);
+  const activeRef      = useRef(true);
   const recognitionRef = useRef(null);
-  const synthRef      = useRef(window.speechSynthesis);
+  const synthRef       = useRef(window.speechSynthesis);
+  const voiceTimerRef  = useRef(null);
 
   const setState = (s) => { callStateRef.current = s; setCallState(s); };
 
@@ -159,10 +151,17 @@ function VoiceCall({ messages, hasToken, onEnd }) {
         else interim += e.results[i][0].transcript;
       }
       setTranscript(final || interim);
+
+      // Show wave animation only while voice is actively coming in
+      setVoiceDetected(true);
+      clearTimeout(voiceTimerRef.current);
+      voiceTimerRef.current = setTimeout(() => setVoiceDetected(false), 600);
+
       if (final.trim()) {
         rec.abort();
         const q = final.trim();
         setTranscript('');
+        setVoiceDetected(false);
         callMsgsRef.current = [...callMsgsRef.current, { role: 'user', content: q }];
         askAI(q);
       }
@@ -236,6 +235,7 @@ function VoiceCall({ messages, hasToken, onEnd }) {
     activeRef.current = false;
     recognitionRef.current?.abort();
     synthRef.current.cancel();
+    clearTimeout(voiceTimerRef.current);
     onEnd(callMsgsRef.current);
   };
 
@@ -293,9 +293,12 @@ function VoiceCall({ messages, hasToken, onEnd }) {
         )}
       </div>
 
-      {/* Animated wave bars */}
+      {/* Animated wave bars — active only when AI speaks or voice detected */}
       <div className="mb-10">
-        <WaveBars state={callState} />
+        <WaveBars
+          active={callState === 'speaking' || (callState === 'listening' && voiceDetected)}
+          color={callState === 'speaking' ? 'bg-blue-400' : voiceDetected ? 'bg-green-400' : 'bg-slate-600'}
+        />
       </div>
 
       {/* End call */}
@@ -316,8 +319,8 @@ export default function AIAssistant({ onBack }) {
   const [hasToken, setHasToken] = useState(false);
   const [inCall, setInCall] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const bottomRef = useRef(null);
-  const inputRef  = useRef(null);
+  const messagesRef = useRef(null);
+  const inputRef    = useRef(null);
 
   // Load token status
   useEffect(() => {
@@ -331,9 +334,11 @@ export default function AIAssistant({ onBack }) {
     saveMessages(messages);
   }, [messages]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom — use scrollTop directly so only the messages div scrolls,
+  // never the browser window (which would hide the header).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, loading]);
 
   const send = async (text) => {
@@ -451,8 +456,8 @@ export default function AIAssistant({ onBack }) {
         </div>
       )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4">
+      {/* Messages — ref used for scrollTop, never scrollIntoView */}
+      <div ref={messagesRef} className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 min-h-0">
         {messages.map((msg, i) => <Message key={i} msg={msg} />)}
 
         {messages.length === 1 && (
@@ -480,7 +485,6 @@ export default function AIAssistant({ onBack }) {
             </div>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
 
       {/* Input area */}

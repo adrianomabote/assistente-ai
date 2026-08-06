@@ -196,7 +196,7 @@ export default function App() {
       {/* ── RIGHT PANEL ─────────────────────────────────────────────────────────
           Desktop: flex-1, always visible
           Mobile:  full width, only visible when chat or AI is open         */}
-      <div className={`flex flex-col h-full flex-1 bg-chat-light dark:bg-chat-dark
+      <div className={`flex flex-col h-full flex-1 min-w-0 overflow-hidden bg-chat-light dark:bg-chat-dark
         md:flex
         ${mobileRightActive ? 'flex' : 'hidden'}`}>
 

@@ -33,20 +33,20 @@ export default function Settings({ status, onDisconnect, onConnect }) {
   };
 
   const tabs = [
-    { id: 'ia',         label: 'IA',       icon: 'support_agent' },
-    { id: 'connection', label: 'Conexão',  icon: 'wifi' },
+    { id: 'ia',         label: 'IA',      icon: 'support_agent' },
+    { id: 'connection', label: 'Conexão', icon: 'wifi' },
   ];
 
   const models = [
-    { value: 'gpt-4o-mini',  label: 'GPT-4o Mini (rápido e económico)' },
-    { value: 'gpt-4o',       label: 'GPT-4o (mais inteligente)' },
-    { value: 'gpt-3.5-turbo',label: 'GPT-3.5 Turbo (legado)' },
+    { value: 'gpt-4o-mini',   label: 'GPT-4o Mini (rápido e económico)' },
+    { value: 'gpt-4o',        label: 'GPT-4o (mais inteligente)' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (legado)' },
   ];
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
+    <div className="flex flex-col flex-1 min-h-0 bg-white dark:bg-[#111b21]">
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-slate-700/50 bg-[#f0f2f5] dark:bg-[#202c33]">
+      <div className="flex border-b border-slate-200 dark:border-slate-700/50 bg-[#f0f2f5] dark:bg-[#202c33] flex-shrink-0">
         {tabs.map(t => (
           <button
             key={t.id}
@@ -63,11 +63,12 @@ export default function Settings({ status, onDisconnect, onConnect }) {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
 
         {/* ── IA tab ─────────────────────────────────── */}
         {activeTab === 'ia' && (
-          <div className="p-4 space-y-4 pb-2">
+          <div className="p-4 space-y-4">
 
             {/* Enable toggle */}
             <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
@@ -83,7 +84,6 @@ export default function Settings({ status, onDisconnect, onConnect }) {
                   <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${settings.aiEnabled ? 'translate-x-7' : 'translate-x-1'}`} />
                 </button>
               </div>
-
               {settings.aiEnabled && !settings.aiToken && (
                 <div className="mt-3 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
                   <span className="material-icons-outlined text-amber-500 text-lg flex-shrink-0">warning</span>
@@ -133,18 +133,30 @@ export default function Settings({ status, onDisconnect, onConnect }) {
             </div>
 
             {/* System prompt */}
-            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-2">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wider">Instruções para a IA</label>
-                <p className="text-xs text-slate-400 mb-2">Descreva como a IA deve se comportar, o tom, o que pode e não pode dizer, os produtos/serviços, etc.</p>
-                <textarea
-                  value={settings.aiSystemPrompt}
-                  onChange={e => setSettings(s => ({ ...s, aiSystemPrompt: e.target.value }))}
-                  rows={10}
-                  placeholder={`Exemplo:\nVocê é um assistente de atendimento da Loja XYZ.\nResponda sempre em português de Portugal.\nSeja simpático, profissional e conciso.\nNão discuta preços — diga que um agente irá entrar em contacto.\nProdutos: camisas, calças, sapatos (ver site: loja.pt)`}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none leading-relaxed"
-                />
-              </div>
+            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
+              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wider">Instruções para a IA</label>
+              <p className="text-xs text-slate-400 mb-2">Descreva como a IA deve se comportar, o tom, o que pode e não pode dizer, os produtos/serviços, etc.</p>
+              <textarea
+                value={settings.aiSystemPrompt}
+                onChange={e => setSettings(s => ({ ...s, aiSystemPrompt: e.target.value }))}
+                rows={8}
+                placeholder={`Exemplo:\nVocê é um assistente de atendimento da Loja XYZ.\nResponda sempre em português de Portugal.\nSeja simpático, profissional e conciso.\nNão discuta preços — diga que um agente irá entrar em contacto.`}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* ── Save button — sticky at bottom of scroll area ── */}
+            <div className="sticky bottom-0 py-3 bg-white dark:bg-[#111b21]">
+              <button
+                onClick={save}
+                disabled={loading}
+                className="w-full py-3.5 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg active:scale-95"
+              >
+                {loading
+                  ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  : <span className="material-icons-outlined text-lg">save</span>}
+                {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
+              </button>
             </div>
           </div>
         )}
@@ -195,24 +207,11 @@ export default function Settings({ status, onDisconnect, onConnect }) {
               <p>2. Abra o WhatsApp no telemóvel</p>
               <p>3. Toque nos três pontos → <strong>Dispositivos conectados</strong></p>
               <p>4. Toque em <strong>Conectar dispositivo</strong> e escaneie o código</p>
-              <p className="text-blue-400 pt-1">⚡ A sessão fica guardada automaticamente. Só precisa de escanear uma vez — mesmo que abra noutro dispositivo.</p>
+              <p className="text-blue-400 pt-1">⚡ A sessão fica guardada automaticamente. Só precisa de escanear uma vez.</p>
             </div>
           </div>
         )}
       </div>
-
-      {/* Sticky save button — always visible at bottom of IA tab */}
-      {activeTab === 'ia' && (
-        <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-[#111b21] border-t border-slate-100 dark:border-slate-700/40">
-          <button onClick={save} disabled={loading}
-            className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm active:scale-95">
-            {loading
-              ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              : <span className="material-icons-outlined text-lg">save</span>}
-            {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
