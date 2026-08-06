@@ -6,9 +6,9 @@ services:
     plan: starter      # starter (pago) tem disco persistente; free não tem
 
     buildCommand: |
-      apt-get install -y chromium-browser 2>/dev/null || true
-      npm install --ignore-scripts
+      npm install vite @vitejs/plugin-react react react-dom tailwindcss autoprefixer postcss socket.io-client axios --ignore-scripts
       npm run build
+      npm install --ignore-scripts
 
     startCommand: npm start
 
