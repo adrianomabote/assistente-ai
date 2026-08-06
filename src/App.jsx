@@ -72,7 +72,15 @@ export default function App() {
     history.pushState(null, '');
   }, [page, activeJid, authed]);
 
-  const handleConnect = useCallback(() => { setShowQR(true); setQr(null); }, []);
+  const handleConnect = useCallback(async () => {
+    setShowQR(true);
+    setQr(null);
+    try {
+      const res = await fetch('/api/connect', { method: 'POST' });
+      const data = await res.json();
+      if (data.qr) setQr(data.qr);
+    } catch {}
+  }, []);
   const handleDisconnect = useCallback(() => {
     fetch('/api/disconnect', { method: 'POST' });
     setStatus('disconnected'); setShowQR(false); setQr(null);

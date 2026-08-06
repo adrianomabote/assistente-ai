@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 
 export default function Settings({ status, onDisconnect, onConnect }) {
   const [settings, setSettings] = useState({
+    evolutionApiUrl: '',
+    evolutionApiKey: '',
+    instanceName: 'zapcrm',
     aiEnabled: false,
     aiToken: '',
     aiModel: 'gpt-4o-mini',
@@ -9,8 +12,9 @@ export default function Settings({ status, onDisconnect, onConnect }) {
   });
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('ia');
-  const [showToken, setShowToken] = useState(false);
+  const [activeTab, setActiveTab] = useState('connection');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showAiToken, setShowAiToken] = useState(false);
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(s => {
@@ -33,8 +37,8 @@ export default function Settings({ status, onDisconnect, onConnect }) {
   };
 
   const tabs = [
-    { id: 'ia',         label: 'IA',      icon: 'support_agent' },
     { id: 'connection', label: 'Conexão', icon: 'wifi' },
+    { id: 'ia',         label: 'IA',      icon: 'support_agent' },
   ];
 
   const models = [
@@ -42,6 +46,8 @@ export default function Settings({ status, onDisconnect, onConnect }) {
     { value: 'gpt-4o',        label: 'GPT-4o (mais inteligente)' },
     { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (legado)' },
   ];
+
+  const apiConfigured = settings.evolutionApiUrl && settings.evolutionApiKey;
 
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white dark:bg-[#111b21]">
@@ -63,14 +69,134 @@ export default function Settings({ status, onDisconnect, onConnect }) {
         ))}
       </div>
 
-      {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+
+        {/* ── Connection tab ─────────────────────────── */}
+        {activeTab === 'connection' && (
+          <div className="p-4 space-y-4">
+
+            {/* Evolution API config */}
+            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-0.5">Evolution API</p>
+                <p className="text-xs text-slate-400 mb-3">
+                  Precisa de uma instância da Evolution API.{' '}
+                  <a href="https://github.com/EvolutionAPI/evolution-api" target="_blank" rel="noopener noreferrer"
+                    className="text-primary hover:underline">Ver repositório</a>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">URL da API</label>
+                <input
+                  type="url"
+                  value={settings.evolutionApiUrl}
+                  onChange={e => setSettings(s => ({ ...s, evolutionApiUrl: e.target.value }))}
+                  placeholder="https://api.suaevolution.com"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">API Key</label>
+                <div className="relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={settings.evolutionApiKey}
+                    onChange={e => setSettings(s => ({ ...s, evolutionApiKey: e.target.value }))}
+                    placeholder="Sua API Key"
+                    className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+                  />
+                  <button type="button" onClick={() => setShowApiKey(s => !s)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <span className="material-icons-outlined text-lg">{showApiKey ? 'visibility_off' : 'visibility'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Nome da instância</label>
+                <input
+                  type="text"
+                  value={settings.instanceName}
+                  onChange={e => setSettings(s => ({ ...s, instanceName: e.target.value }))}
+                  placeholder="zapcrm"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+            </div>
+
+            {/* Save button */}
+            <button
+              onClick={save}
+              disabled={loading}
+              className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm active:scale-95"
+            >
+              {loading
+                ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <span className="material-icons-outlined text-lg">save</span>}
+              {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
+            </button>
+
+            {/* WhatsApp connection */}
+            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-[#2a3942] rounded-lg">
+                <div className={`w-4 h-4 rounded-full flex-shrink-0 ${
+                  status === 'connected' ? 'bg-green-400' :
+                  status === 'qr' ? 'bg-yellow-400 animate-pulse' :
+                  'bg-slate-400'
+                }`} />
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    {status === 'connected' ? 'WhatsApp Conectado ✅' :
+                     status === 'qr' ? 'Aguardando leitura do QR Code...' :
+                     'WhatsApp Desconectado'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {status === 'connected' ? 'Sessão ativa' :
+                     status === 'qr' ? 'Escaneie o QR Code com o seu telemóvel' :
+                     'Configure a API acima e clique em conectar'}
+                  </p>
+                </div>
+              </div>
+
+              {!apiConfigured && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                  <span className="material-icons-outlined text-amber-500 text-lg flex-shrink-0">warning</span>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">Configure e salve a Evolution API antes de conectar.</p>
+                </div>
+              )}
+
+              {status !== 'connected' ? (
+                <button onClick={onConnect} disabled={!apiConfigured}
+                  className="w-full py-3 bg-primary hover:bg-primary-dark disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
+                  <span className="material-icons-outlined">qr_code_scanner</span>
+                  Conectar via QR Code
+                </button>
+              ) : (
+                <button onClick={onDisconnect}
+                  className="w-full py-3 text-red-500 font-semibold rounded-xl border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center gap-2 transition-colors">
+                  <span className="material-icons-outlined">logout</span>
+                  Desconectar WhatsApp
+                </button>
+              )}
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-xs text-blue-600 dark:text-blue-300 space-y-1.5">
+              <p className="font-semibold">📱 Como conectar</p>
+              <p>1. Configure a URL e API Key da Evolution API acima</p>
+              <p>2. Clique em <strong>Guardar configurações</strong></p>
+              <p>3. Clique em <strong>Conectar via QR Code</strong></p>
+              <p>4. Abra o WhatsApp → <strong>Dispositivos conectados</strong> → escaneie</p>
+              <p>5. Configure o webhook na Evolution API: <code className="bg-blue-100 dark:bg-blue-900/40 px-1 rounded">/webhook/evolution</code></p>
+            </div>
+          </div>
+        )}
 
         {/* ── IA tab ─────────────────────────────────── */}
         {activeTab === 'ia' && (
           <div className="p-4 space-y-4">
 
-            {/* Enable toggle */}
             <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
@@ -92,24 +218,20 @@ export default function Settings({ status, onDisconnect, onConnect }) {
               )}
             </div>
 
-            {/* API Token */}
             <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Token OpenAI</label>
                 <div className="relative">
                   <input
-                    type={showToken ? 'text' : 'password'}
+                    type={showAiToken ? 'text' : 'password'}
                     value={settings.aiToken}
                     onChange={e => setSettings(s => ({ ...s, aiToken: e.target.value }))}
                     placeholder="sk-..."
                     className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(s => !s)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                  >
-                    <span className="material-icons-outlined text-lg">{showToken ? 'visibility_off' : 'visibility'}</span>
+                  <button type="button" onClick={() => setShowAiToken(s => !s)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <span className="material-icons-outlined text-lg">{showAiToken ? 'visibility_off' : 'visibility'}</span>
                   </button>
                 </div>
                 <p className="text-xs text-slate-400 mt-1.5">
@@ -119,7 +241,6 @@ export default function Settings({ status, onDisconnect, onConnect }) {
                 </p>
               </div>
 
-              {/* Model */}
               <div>
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Modelo</label>
                 <select
@@ -132,20 +253,18 @@ export default function Settings({ status, onDisconnect, onConnect }) {
               </div>
             </div>
 
-            {/* System prompt */}
             <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm">
               <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-0.5 uppercase tracking-wider">Instruções para a IA</label>
-              <p className="text-xs text-slate-400 mb-2">Descreva como a IA deve se comportar, o tom, o que pode e não pode dizer, os produtos/serviços, etc.</p>
+              <p className="text-xs text-slate-400 mb-2">Descreva como a IA deve se comportar, o tom, os produtos/serviços, etc.</p>
               <textarea
                 value={settings.aiSystemPrompt}
                 onChange={e => setSettings(s => ({ ...s, aiSystemPrompt: e.target.value }))}
                 rows={8}
-                placeholder={`Exemplo:\nVocê é um assistente de atendimento da Loja XYZ.\nResponda sempre em português de Portugal.\nSeja simpático, profissional e conciso.\nNão discuta preços — diga que um agente irá entrar em contacto.`}
+                placeholder={`Exemplo:\nVocê é um assistente da Loja XYZ.\nResponda em português.\nSeja simpático e conciso.`}
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#2a3942] text-slate-800 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none leading-relaxed"
               />
             </div>
 
-            {/* ── Save button — sticky at bottom of scroll area ── */}
             <div className="sticky bottom-0 py-3 bg-white dark:bg-[#111b21]">
               <button
                 onClick={save}
@@ -157,57 +276,6 @@ export default function Settings({ status, onDisconnect, onConnect }) {
                   : <span className="material-icons-outlined text-lg">save</span>}
                 {saved ? '✓ Configurações salvas!' : 'Guardar configurações'}
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Connection tab ───────────────────────── */}
-        {activeTab === 'connection' && (
-          <div className="p-4 space-y-4">
-            <div className="bg-white dark:bg-[#202c33] rounded-xl p-4 shadow-sm space-y-4">
-              {/* Status */}
-              <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-[#2a3942] rounded-lg">
-                <div className={`w-4 h-4 rounded-full flex-shrink-0 ${
-                  status === 'connected' ? 'bg-green-400' :
-                  status === 'qr' ? 'bg-yellow-400 animate-pulse' :
-                  'bg-slate-400'
-                }`} />
-                <div>
-                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    {status === 'connected' ? 'WhatsApp Conectado ✅' :
-                     status === 'qr' ? 'Aguardando leitura do QR Code...' :
-                     'WhatsApp Desconectado'}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {status === 'connected' ? 'A sessão fica guardada — não precisa de voltar a ligar' :
-                     status === 'qr' ? 'Escaneie o QR Code com o seu telemóvel' :
-                     'Ligue para começar a usar o ZapCRM'}
-                  </p>
-                </div>
-              </div>
-
-              {status !== 'connected' ? (
-                <button onClick={onConnect}
-                  className="w-full py-3 bg-primary hover:bg-primary-dark text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm">
-                  <span className="material-icons-outlined">qr_code_scanner</span>
-                  Conectar via QR Code
-                </button>
-              ) : (
-                <button onClick={onDisconnect}
-                  className="w-full py-3 text-red-500 font-semibold rounded-xl border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center justify-center gap-2 transition-colors">
-                  <span className="material-icons-outlined">logout</span>
-                  Desconectar WhatsApp
-                </button>
-              )}
-            </div>
-
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 text-xs text-blue-600 dark:text-blue-300 space-y-1.5">
-              <p className="font-semibold">📱 Como conectar</p>
-              <p>1. Clique em <strong>Conectar via QR Code</strong></p>
-              <p>2. Abra o WhatsApp no telemóvel</p>
-              <p>3. Toque nos três pontos → <strong>Dispositivos conectados</strong></p>
-              <p>4. Toque em <strong>Conectar dispositivo</strong> e escaneie o código</p>
-              <p className="text-blue-400 pt-1">⚡ A sessão fica guardada automaticamente. Só precisa de escanear uma vez.</p>
             </div>
           </div>
         )}
