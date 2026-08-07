@@ -15,10 +15,12 @@ O frontend fica em `http://localhost:5000` e a API em `http://localhost:3001`.
 
 Crie um **Web Service** a partir deste repositório. Não é necessário Blueprint nem `render.yaml`.
 
+O frontend já vem compilado na pasta `dist/`, por isso o Render não precisa de fazer build.
+
 **Build Command**
 
 ```bash
-npm ci && npm run build
+npm install --omit=dev
 ```
 
 **Start Command**

@@ -21,7 +21,7 @@ Este é um Web Service Node.js normal, sem Blueprint ou ficheiro de configuraç�
 2. No Render, escolha **New + → Web Service**.
 3. Selecione o repositório e escolha **Node**.
 4. Use estes comandos:
-   - **Build Command:** `npm ci && npm run build`
+   - **Build Command:** `npm install --omit=dev` (o frontend já vem compilado em `dist/`; depois de alterar código do frontend, correr `npm run build` e fazer commit do `dist/`)
    - **Start Command:** `npm start`
 5. Adicione a variável `APP_PASSWORD` com uma senha sua.
 6. Faça o deploy.
