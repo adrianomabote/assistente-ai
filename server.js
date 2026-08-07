@@ -153,8 +153,8 @@ if (IS_PROD) {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
-  const expected = process.env.APP_PASSWORD || '00220022aA1';
-  res.json({ ok: password === expected });
+  const expected = process.env.APP_PASSWORD || (!IS_PROD ? '00220022aA1' : null);
+  res.json({ ok: Boolean(expected) && password === expected });
 });
 
 // ─── Status ───────────────────────────────────────────────────────────────────
