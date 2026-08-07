@@ -15,17 +15,21 @@ npm run dev
 - Backend API: http://localhost:3001
 
 ## Como publicar no Render
-1. Faça push deste repositório para o GitHub.
-2. No Render, escolha **New + → Blueprint** e selecione o repositório.
-3. Confirme o `render.yaml`. Ele cria um Web Service Node.js na região de Frankfurt.
-4. O Render executa `npm ci && npm run build` e inicia com `npm start`.
-5. A variável `APP_PASSWORD` é gerada automaticamente pelo Blueprint. Consulte o valor nas variáveis de ambiente do serviço para entrar no CRM.
-6. O disco persistente `/data` mantém conversas e configurações entre reinícios.
+Este é um Web Service Node.js normal, sem Blueprint ou ficheiro de configuração obrigatório.
 
-O `render.yaml` inclui o health check `/api/status`. Depois do deploy, configure a URL e a API Key da Evolution API no separador **Configurações** do CRM. O endereço do webhook será:
+1. Faça push deste repositório para o GitHub.
+2. No Render, escolha **New + → Web Service**.
+3. Selecione o repositório e escolha **Node**.
+4. Use estes comandos:
+   - **Build Command:** `npm ci && npm run build`
+   - **Start Command:** `npm start`
+5. Adicione a variável `APP_PASSWORD` com uma senha sua.
+6. Faça o deploy.
+
+Depois do deploy, configure a URL e a API Key da Evolution API no separador **Configurações** do CRM. O endereço do webhook será:
 `https://<teu-servico>.onrender.com/webhook/evolution`
 
-Nota: a Evolution API precisa de estar acessível publicamente pelo Render. Não coloque a API Key no código nem no GitHub; guarde-a apenas nas configurações da aplicação.
+As conversas e configurações são guardadas em `data/data.json`. No plano normal do Render, o disco local é temporário; para manter os dados depois de reinícios, adicione um Persistent Disk no Render ou ligue uma base de dados externa.
 
 ## Como conectar o WhatsApp
 1. Acesse a aba **Configurações** (ícone de engrenagem)
